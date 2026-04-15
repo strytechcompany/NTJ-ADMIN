@@ -108,6 +108,14 @@ function ActiveChitCard({ request }) {
             <Text style={styles.metalBadgeText}>{metal.toUpperCase()}</Text>
           </View>
         </View>
+        {(request.planName || request.requestName) ? (
+          <View style={styles.chitSubRow}>
+            <Text style={styles.chitSubLabel}>PLAN NAME</Text>
+            <Text style={styles.chitSubValue}>
+              {request.planName || request.requestName}
+            </Text>
+          </View>
+        ) : null}
         {request.totalAmount ? (
           <View style={styles.chitSubRow}>
             <Text style={styles.chitSubLabel}>TOTAL VALUE</Text>

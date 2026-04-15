@@ -87,9 +87,6 @@ export default function LoginScreen({ navigation }) {
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.headerRow}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoText}>TCL</Text>
-            </View>
             <View style={styles.headerCopy}>
               <Text style={styles.brandTitle}>NTJ Admin</Text>
               <Text style={styles.brandSubtitle}>Admin Portal</Text>
@@ -182,19 +179,6 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     gap: 16
-  },
-  logoBadge: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: palette.primary,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  logoText: {
-    color: "#fffefb",
-    fontSize: 16,
-    fontWeight: "800"
   },
   headerCopy: {
     gap: 4

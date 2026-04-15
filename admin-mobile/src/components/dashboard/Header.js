@@ -15,7 +15,7 @@ export default function Header({ theme, subtitle, onLogout }) {
       </View>
 
       <Pressable style={[styles.notification, { backgroundColor: theme.surface }]} onPress={onLogout}>
-        <Text style={[styles.notificationText, { color: theme.accentStrong }]}>AL</Text>
+        <MaterialCommunityIcons name="logout" size={20} color={theme.accentStrong} />
       </Pressable>
     </View>
   );

@@ -44,6 +44,7 @@ export default function ChitsScreen() {
     email: "",
     userId: "",
     userName: "Select User",
+    planName: "",
     monthlyAmount: "",
     amount: "",
     metalType: "gold"
@@ -81,6 +82,7 @@ export default function ChitsScreen() {
       email: "",
       userId: "",
       userName: "Select User",
+      planName: "",
       monthlyAmount: "",
       amount: "",
       metalType: session?.department || "gold"
@@ -103,6 +105,7 @@ export default function ChitsScreen() {
         if (!form.userId || !form.monthlyAmount) throw new Error("User and Monthly Amount are required");
         res = await manualAssignChit(session.token, {
           userId: form.userId,
+          planName: form.planName,
           monthlyAmount: form.monthlyAmount,
           metalType: form.metalType
         });
@@ -227,6 +230,16 @@ export default function ChitsScreen() {
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={20} color="#b18a0b" />
             </TouchableOpacity>
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>PLAN NAME (OPTIONAL)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. My Gold Savings Plan"
+              placeholderTextColor="#b0a89c"
+              value={form.planName}
+              onChangeText={(t) => setForm({ ...form, planName: t })}
+            />
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>MONTHLY COMMITMENT</Text>

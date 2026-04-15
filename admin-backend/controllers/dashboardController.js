@@ -416,6 +416,8 @@ const getPendingRequests = async (req, res) => {
             duration: 1,
             createdAt: 1,
             userId: 1,
+            planName: 1,
+            requestName: 1,
             userName: { $ifNull: ["$resolvedUser.name", "Unknown Member"] },
             userMobile: { $ifNull: ["$resolvedUser.mobile", ""] },
             userEmail: { $ifNull: ["$resolvedUser.email", ""] },
@@ -513,6 +515,8 @@ const getActiveChits = async (req, res) => {
             duration: 1,
             createdAt: 1,
             userId: 1,
+            planName: 1,
+            requestName: 1,
             userName: { $ifNull: ["$resolvedUser.name", "Unknown Member"] },
             userMobile: { $ifNull: ["$resolvedUser.mobile", ""] },
             userEmail: { $ifNull: ["$resolvedUser.email", ""] },
@@ -716,7 +720,7 @@ const manualCreateUser = async (req, res) => {
 
 const manualAssignChit = async (req, res) => {
   try {
-    const { userId, metalType, monthlyAmount } = req.body;
+    const { userId, metalType, monthlyAmount, planName } = req.body;
     const adminDept = req.user?.department;
 
     if (!userId || !monthlyAmount) {
@@ -729,6 +733,7 @@ const manualAssignChit = async (req, res) => {
     const newChit = {
       userId: new mongoose.Types.ObjectId(userId),
       metalType: type.toLowerCase(),
+      planName: planName || undefined,
       monthlyAmount: Number(monthlyAmount),
       status: "approved",
       txnId: `MAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
