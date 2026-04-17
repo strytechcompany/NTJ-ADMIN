@@ -229,11 +229,12 @@ export default function DashboardScreen({ navigation, department = "gold" }) {
 
           <StatCard
             theme={theme}
-            title="REQUESTS"
-            value={formatNumber(dashboard.pendingRequests)}
-            detail="Requiring immediate action"
-            badge="REQ"
-            accent={theme.negative}
+            title="UPI CONFIG"
+            value={dashboard.activeUPI ? "ACTIVE" : "NONE"}
+            detail={dashboard.activeUPI ? dashboard.activeUPI.upiId : "No active UPI set"}
+            badge="UPI"
+            accent={dashboard.activeUPI ? theme.accentStrong : theme.negative}
+            onPress={() => navigation.navigate("UPIScreen", { department })}
           />
         </View>
 

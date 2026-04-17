@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const UPIConfig = require("../models/UPIConfig");
 
 const buildTimeAgo = (value) => {
   if (!value) {
@@ -90,6 +91,16 @@ const getDashboard = async (req, res) => {
               status: { $in: ["active", "approved"] }
             }
           },
+          { $addFields: { userObjectId: asObjectId } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "userObjectId",
+              foreignField: "_id",
+              as: "user"
+            }
+          },
+          { $match: { "user._id": { $exists: true } } },
           { $count: "count" }
         ])
         .toArray(),
@@ -99,9 +110,39 @@ const getDashboard = async (req, res) => {
           {
             $match: {
               metalType: normalizedDepartment,
-              status: { $regex: /^success$/i }
+              status: { $regex: /^(success|paid|completed|captured)$/i }
             }
           },
+          {
+            $unionWith: {
+              coll: "chitfunds",
+              pipeline: [
+                {
+                  $match: {
+                    metalType: normalizedDepartment,
+                    status: { $in: ["approved", "active"] }
+                  }
+                },
+                {
+                  $project: {
+                    userId: 1,
+                    amountPaid: "$monthlyAmount",
+                    status: 1
+                  }
+                }
+              ]
+            }
+          },
+          { $addFields: { userObjectId: asObjectId } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "userObjectId",
+              foreignField: "_id",
+              as: "user"
+            }
+          },
+          { $match: { "user._id": { $exists: true } } },
           {
             $group: {
               _id: null,
@@ -119,6 +160,16 @@ const getDashboard = async (req, res) => {
               status: { $regex: /^pending$/i }
             }
           },
+          { $addFields: { userObjectId: asObjectId } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "userObjectId",
+              foreignField: "_id",
+              as: "user"
+            }
+          },
+          { $match: { "user._id": { $exists: true } } },
           { $count: "count" }
         ])
         .toArray(),
@@ -131,6 +182,16 @@ const getDashboard = async (req, res) => {
               status: { $regex: /^pending$/i }
             }
           },
+          { $addFields: { userObjectId: asObjectId } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "userObjectId",
+              foreignField: "_id",
+              as: "user"
+            }
+          },
+          { $match: { "user._id": { $exists: true } } },
           { $count: "count" }
         ])
         .toArray(),
@@ -178,7 +239,7 @@ const getDashboard = async (req, res) => {
         .aggregate([
           { $match: { metalType: normalizedDepartment } },
           { $sort: { createdAt: -1 } },
-          { $limit: 4 },
+          { $limit: 10 },
           { $addFields: { userObjectId: asObjectId } },
           {
             $lookup: {
@@ -188,6 +249,8 @@ const getDashboard = async (req, res) => {
               as: "user"
             }
           },
+          { $match: { "user._id": { $exists: true } } },
+          { $limit: 4 },
           {
             $project: {
               createdAt: 1,
@@ -221,7 +284,7 @@ const getDashboard = async (req, res) => {
                 $cond: [
                   { $eq: [{ $toLower: "$status" }, "pending"] },
                   "Reject",
-                  ""
+                  "View"
                 ]
               }
             }
@@ -233,7 +296,7 @@ const getDashboard = async (req, res) => {
         .aggregate([
           { $match: { metalType: normalizedDepartment } },
           { $sort: { createdAt: -1 } },
-          { $limit: 4 },
+          { $limit: 10 },
           { $addFields: { userObjectId: asObjectId } },
           {
             $lookup: {
@@ -243,6 +306,8 @@ const getDashboard = async (req, res) => {
               as: "user"
             }
           },
+          { $match: { "user._id": { $exists: true } } },
+          { $limit: 4 },
           {
             $project: {
               createdAt: 1,
@@ -276,7 +341,7 @@ const getDashboard = async (req, res) => {
                 $cond: [
                   { $eq: [{ $toLower: "$status" }, "success"] },
                   "Verified",
-                  ""
+                  "View"
                 ]
               }
             }
@@ -302,6 +367,11 @@ const getDashboard = async (req, res) => {
 
     const latestRate = marketResult[0] || null;
     const pendingRequests = (pendingChitsResult[0]?.count || 0) + (pendingOrdersResult[0]?.count || 0);
+
+    const activeUPI = await UPIConfig.findOne({ 
+      department: department.toLowerCase(), 
+      isActive: true 
+    });
 
     return res.status(200).json({
       totalUsers: totalUsersCount,
@@ -405,6 +475,12 @@ const getPendingRequests = async (req, res) => {
             }
           }
         },
+        // Filter out orphaned records (requests where no user was found in the DB)
+        {
+          $match: {
+            "resolvedUser._id": { $exists: true }
+          }
+        },
         {
           $project: {
             _id: 1,
@@ -502,6 +578,12 @@ const getActiveChits = async (req, res) => {
                 { $arrayElemAt: ["$userByString", 0] }
               ]
             }
+          }
+        },
+        // Filter out orphaned records (chits where no user was found in the DB)
+        {
+          $match: {
+            "resolvedUser._id": { $exists: true }
           }
         },
         {
@@ -795,6 +877,391 @@ const manualAddPayment = async (req, res) => {
   }
 };
 
+const getPaymentHistory = async (req, res) => {
+  try {
+    const department = req.user?.department;
+    if (!["gold", "silver"].includes(department)) {
+      return res.status(403).json({ message: "Department access is required" });
+    }
+
+    const db = mongoose.connection.db;
+    const normalizedDepartment = department.toLowerCase();
+
+    const payments = await db
+      .collection("orders")
+      .aggregate([
+        {
+          $match: {
+            $or: [
+              { metalType: normalizedDepartment },
+              { metalType: { $exists: false } },
+              { metalType: null }
+            ]
+          }
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 200 },
+
+        // ── Merge Approved Chits ──────────────────────────────────────
+        // This brings in both manual and online chits once they are
+        // approved/active, so they show up in the payment timeline.
+        {
+          $unionWith: {
+            coll: "chitfunds",
+            pipeline: [
+              {
+                $match: {
+                  metalType: normalizedDepartment,
+                  status: { $in: ["approved", "active"] }
+                }
+              },
+              {
+                $project: {
+                  _id: 1,
+                  userId: 1,
+                  amountPaid: "$monthlyAmount",
+                  metalType: 1,
+                  status: 1,
+                  paymentMethod: { $literal: "manual" },
+                  createdAt: 1,
+                  txnId: 1
+                }
+              }
+            ]
+          }
+        },
+
+        // Sort again after merging
+        { $sort: { createdAt: -1 } },
+
+        // ── Resolve the user reference field ──────────────────────────
+        // Different apps store the user reference differently.
+        // Build a single "rawUserId" that normalises all variants.
+        {
+          $addFields: {
+            rawUserId: {
+              $ifNull: [
+                "$userId",
+                {
+                  $ifNull: [
+                    "$user_id",
+                    { $ifNull: ["$user", { $ifNull: ["$customerId", null] }] }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+
+        // Convert that raw id to ObjectId (works if it is already an ObjectId or a valid hex string)
+        {
+          $addFields: {
+            userObjectId: {
+              $convert: {
+                input: "$rawUserId",
+                to: "objectId",
+                onError: null,
+                onNull: null
+              }
+            }
+          }
+        },
+
+        // Lookup 1 – by ObjectId
+        {
+          $lookup: {
+            from: "users",
+            localField: "userObjectId",
+            foreignField: "_id",
+            as: "userByObjectId"
+          }
+        },
+
+        // Lookup 2 – by string (handles cases where _id is stored as string in users)
+        {
+          $lookup: {
+            from: "users",
+            let: { uid: { $toString: "$rawUserId" } },
+            pipeline: [
+              { $addFields: { idStr: { $toString: "$_id" } } },
+              { $match: { $expr: { $eq: ["$idStr", "$$uid"] } } }
+            ],
+            as: "userByString"
+          }
+        },
+
+        // Lookup 3 – by mobile number (fallback when userId is actually a mobile string)
+        {
+          $lookup: {
+            from: "users",
+            let: { mob: { $toString: "$rawUserId" } },
+            pipeline: [
+              { $match: { $expr: { $eq: ["$mobile", "$$mob"] } } }
+            ],
+            as: "userByMobile"
+          }
+        },
+
+        // Pick the first successful lookup result
+        {
+          $addFields: {
+            resolvedUser: {
+              $switch: {
+                branches: [
+                  {
+                    case: { $gt: [{ $size: "$userByObjectId" }, 0] },
+                    then: { $arrayElemAt: ["$userByObjectId", 0] }
+                  },
+                  {
+                    case: { $gt: [{ $size: "$userByString" }, 0] },
+                    then: { $arrayElemAt: ["$userByString", 0] }
+                  },
+                  {
+                    case: { $gt: [{ $size: "$userByMobile" }, 0] },
+                    then: { $arrayElemAt: ["$userByMobile", 0] }
+                  }
+                ],
+                default: null
+              }
+            }
+          }
+        },
+
+        // Filter out orphaned records (orders where no user was found in the DB)
+        // We use resolvedUser._id existence to be 100% sure we have a valid user object
+        {
+          $match: {
+            "resolvedUser._id": { $exists: true }
+          }
+        },
+
+        {
+          $project: {
+            _id: 1,
+            amountPaid: { $ifNull: ["$amountPaid", { $ifNull: ["$amount", 0] }] },
+            metalType: 1,
+            metalName: 1,
+            status: { 
+              $cond: [
+                { $in: [{ $toLower: "$status" }, ["approved", "active"]] },
+                "success",
+                { $ifNull: ["$status", "unknown"] }
+              ]
+            },
+            paymentMethod: { $ifNull: ["$paymentMethod", { $ifNull: ["$method", "online"] }] },
+            createdAt: 1,
+            txnId: {
+              $ifNull: [
+                "$txnId",
+                { $ifNull: ["$transactionId", { $ifNull: ["$razorpay_payment_id", { $toString: "$_id" }] }] }
+              ]
+            },
+            userName: { $ifNull: ["$resolvedUser.name", "Unknown Member"] },
+            userMobile: { $ifNull: ["$resolvedUser.mobile", ""] },
+            userEmail: { $ifNull: ["$resolvedUser.email", ""] },
+            rawUserId: 1,
+            resolvedUserId: { $ifNull: ["$resolvedUser._id", null] }
+          }
+        },
+
+        // Filter for success/approved only
+        {
+          $match: {
+            status: { $regex: /^(success|paid|completed|captured|approved|active)$/i }
+          }
+        }
+      ])
+      .toArray();
+
+    // Compute summary stats (all these statuses represent successful collection)
+    const successStatuses = ["success", "paid", "completed", "captured", "approved", "active"];
+    const totalCollected = payments
+      .filter(p => successStatuses.includes((p.status || "").toLowerCase()))
+      .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+
+    const pendingCount = payments.filter(
+      p => (p.status || "").toLowerCase() === "pending"
+    ).length;
+
+    const unknownUserCount = payments.filter(p => p.userName === "Unknown Member").length;
+
+    return res.status(200).json({
+      payments,
+      summary: {
+        totalCollected,
+        totalTransactions: payments.length,
+        pendingCount,
+        unknownUserCount  // helpful diagnostic field
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Unable to fetch payment history",
+      error: error.message
+    });
+  }
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// DEBUG endpoint — shows raw order + user data to diagnose field mismatches
+// Access: GET /admin/debug/orders  (requires admin token)
+// ────────────────────────────────────────────────────────────────────────────
+const debugOrders = async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+
+    // Grab the 5 most recent orders with ALL fields
+    const rawOrders = await db
+      .collection("orders")
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .toArray();
+
+    // Grab 5 users for comparison
+    const rawUsers = await db
+      .collection("users")
+      .find({ role: { $ne: "admin" } })
+      .limit(5)
+      .project({ name: 1, mobile: 1, email: 1, _id: 1 })
+      .toArray();
+
+    // Show distinct field names actually present in orders collection
+    const allFieldNames = [...new Set(rawOrders.flatMap(o => Object.keys(o)))];
+
+    return res.status(200).json({
+      hint: "Compare 'orderFields' keys with 'users._id' to find the correct userId field",
+      orderFields: allFieldNames,
+      sampleOrders: rawOrders.map(o => ({
+        ...o,
+        _id: o._id?.toString(),
+        userId: o.userId?.toString(),
+        user_id: o.user_id?.toString(),
+        user: o.user?.toString()
+      })),
+      sampleUsers: rawUsers.map(u => ({
+        _id: u._id?.toString(),
+        name: u.name,
+        mobile: u.mobile,
+        email: u.email
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Debug failed", error: error.message });
+  }
+};
+
+// ──────────────── UPI MANAGEMENT ────────────────
+const getUPIs = async (req, res) => {
+  try {
+    const department = req.user?.department;
+    if (!department) return res.status(403).json({ message: "Forbidden" });
+
+    const upis = await UPIConfig.find({ department: department.toLowerCase() }).sort({ createdAt: -1 });
+    return res.status(200).json(upis);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch UPIs", error: error.message });
+  }
+};
+
+const addUPI = async (req, res) => {
+  try {
+    const { upiId, label } = req.body;
+    const department = req.user?.department;
+
+    if (!upiId || !label) {
+      return res.status(400).json({ message: "UPI ID and label are required" });
+    }
+
+    // If this is the first UPI for this department, mark it as active
+    const count = await UPIConfig.countDocuments({ department: department.toLowerCase() });
+
+    const newUPI = new UPIConfig({
+      upiId: upiId.trim(),
+      label: label.trim(),
+      department: department.toLowerCase(),
+      isActive: count === 0
+    });
+
+    await newUPI.save();
+    return res.status(201).json(newUPI);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to add UPI", error: error.message });
+  }
+};
+
+const setActiveUPI = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const department = req.user?.department;
+
+    // Set all UPIs for this department to inactive
+    await UPIConfig.updateMany(
+      { department: department.toLowerCase() },
+      { $set: { isActive: false } }
+    );
+
+    // Set the specific UPI to active
+    const updated = await UPIConfig.findOneAndUpdate(
+      { _id: id, department: department.toLowerCase() },
+      { $set: { isActive: true } },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ message: "UPI not found" });
+
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update active UPI", error: error.message });
+  }
+};
+
+const deleteUPI = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const department = req.user?.department;
+
+    const target = await UPIConfig.findOne({ _id: id, department: department.toLowerCase() });
+    if (!target) return res.status(404).json({ message: "UPI not found" });
+
+    await UPIConfig.deleteOne({ _id: id });
+
+    // If we deleted the active one, mark the most recent one as active
+    if (target.isActive) {
+      const latest = await UPIConfig.findOne({ department: department.toLowerCase() }).sort({ createdAt: -1 });
+      if (latest) {
+        latest.isActive = true;
+        await latest.save();
+      }
+    }
+
+    return res.status(200).json({ message: "UPI deleted successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete UPI", error: error.message });
+  }
+};
+
+// PUBLIC endpoint for Customer App to fetch the active UPI
+const getActiveUPIPublic = async (req, res) => {
+  try {
+    const { department } = req.query; // gold or silver
+    if (!department) return res.status(400).json({ message: "Department is required" });
+
+    const activeUPI = await UPIConfig.findOne({ 
+      department: department.toLowerCase(), 
+      isActive: true 
+    });
+
+    if (!activeUPI) {
+      return res.status(404).json({ message: "No active UPI found for this department" });
+    }
+
+    return res.status(200).json({ upiId: activeUPI.upiId, label: activeUPI.label });
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching active UPI", error: error.message });
+  }
+};
+
 module.exports = {
   getDashboard,
   getPendingRequests,
@@ -804,5 +1271,12 @@ module.exports = {
   updateMetalRate,
   manualCreateUser,
   manualAssignChit,
-  manualAddPayment
+  manualAddPayment,
+  getPaymentHistory,
+  getUPIs,
+  addUPI,
+  setActiveUPI,
+  deleteUPI,
+  getActiveUPIPublic,
+  debugOrders
 };

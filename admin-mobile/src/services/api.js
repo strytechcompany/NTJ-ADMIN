@@ -142,4 +142,61 @@ export const manualAddPayment = async (token, payload) => {
   }
 };
 
+export const getPaymentHistory = async (token) => {
+  try {
+    const response = await api.get("/admin/payments", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
+// UPI Management
+export const fetchUPIs = async (token) => {
+  try {
+    const response = await api.get("/admin/upi", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    extractError(error);
+  }
+};
+
+export const createUPI = async (token, payload) => {
+  try {
+    const response = await api.post("/admin/upi", payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    extractError(error);
+  }
+};
+
+export const toggleUPIActive = async (token, id) => {
+  try {
+    const response = await api.patch(`/admin/upi/${id}/active`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    extractError(error);
+  }
+};
+
+export const removeUPI = async (token, id) => {
+  try {
+    const response = await api.delete(`/admin/upi/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    extractError(error);
+  }
+};
+
 export { API_BASE_URL };
+
