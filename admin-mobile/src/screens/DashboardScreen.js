@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -83,6 +84,7 @@ const FALLBACK_DATA = {
   activeChits: 0,
   revenue: 0,
   pendingRequests: 0,
+  activeUPI: null,
   market: {
     rate: 0,
     currency: "INR",
@@ -126,9 +128,11 @@ export default function DashboardScreen({ navigation, department = "gold" }) {
     }
   };
 
-  useEffect(() => {
-    loadDashboard();
-  }, [department]);
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard("refresh");
+    }, [department])
+  );
 
   const subtitle = department === "gold" ? "GOLD OVERSIGHT" : "SILVER OVERSIGHT";
   const marketHeadline = useMemo(() => {

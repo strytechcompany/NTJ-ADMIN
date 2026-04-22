@@ -7,6 +7,8 @@ const router = express.Router();
 router.get("/dashboard", protectAdmin, dashboardController.getDashboard);
 router.get("/requests", protectAdmin, dashboardController.getPendingRequests);
 router.get("/users", protectAdmin, dashboardController.getUsersList);
+router.get("/users/:id", protectAdmin, dashboardController.getUserDetails);
+router.delete("/users/:id", protectAdmin, dashboardController.deleteUser);
 router.patch("/requests/:id", protectAdmin, dashboardController.updateRequestStatus);
 router.post("/rate", protectAdmin, dashboardController.updateMetalRate);
 router.get("/active-chits", protectAdmin, dashboardController.getActiveChits);

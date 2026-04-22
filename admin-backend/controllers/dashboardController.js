@@ -113,26 +113,6 @@ const getDashboard = async (req, res) => {
               status: { $regex: /^(success|paid|completed|captured)$/i }
             }
           },
-          {
-            $unionWith: {
-              coll: "chitfunds",
-              pipeline: [
-                {
-                  $match: {
-                    metalType: normalizedDepartment,
-                    status: { $in: ["approved", "active"] }
-                  }
-                },
-                {
-                  $project: {
-                    userId: 1,
-                    amountPaid: "$monthlyAmount",
-                    status: 1
-                  }
-                }
-              ]
-            }
-          },
           { $addFields: { userObjectId: asObjectId } },
           {
             $lookup: {
@@ -395,6 +375,7 @@ const getDashboard = async (req, res) => {
             type: normalizedDepartment,
             updatedAt: null
           },
+      activeUPI: activeUPI ? { upiId: activeUPI.upiId, label: activeUPI.label } : null,
       recentActivity
     });
   } catch (error) {
@@ -429,6 +410,21 @@ const getPendingRequests = async (req, res) => {
       .collection("chitfunds")
       .aggregate([
         { $match: matchStage },
+        { $addFields: { requestType: "chit" } },
+        {
+          $unionWith: {
+            coll: "orders",
+            pipeline: [
+              { 
+                $match: { 
+                  status: { $regex: /^pending$/i },
+                  metalType: normalizedDepartment
+                } 
+              },
+              { $addFields: { requestType: "payment" } }
+            ]
+          }
+        },
         { $sort: { createdAt: -1 } },
         // Try to convert userId to ObjectId (works if stored as string or ObjectId)
         {
@@ -485,14 +481,16 @@ const getPendingRequests = async (req, res) => {
           $project: {
             _id: 1,
             txnId: { $ifNull: ["$txnId", { $toString: "$_id" }] },
+            requestType: { $ifNull: ["$requestType", "chit"] },
             status: 1,
             metalType: 1,
-            monthlyAmount: 1,
+            monthlyAmount: { $ifNull: ["$monthlyAmount", "$amountPaid"] },
+            amountPaid: 1,
             totalAmount: 1,
             duration: 1,
             createdAt: 1,
-            userId: 1,
-            planName: 1,
+            userId: { $ifNull: ["$userId", "$user_id"] },
+            planName: { $ifNull: ["$planName", "$metalName"] },
             requestName: 1,
             userName: { $ifNull: ["$resolvedUser.name", "Unknown Member"] },
             userMobile: { $ifNull: ["$resolvedUser.mobile", ""] },
@@ -629,13 +627,59 @@ const updateRequestStatus = async (req, res) => {
     }
 
     const db = mongoose.connection.db;
-    const result = await db.collection("chitfunds").updateOne(
+    const objectId = new mongoose.Types.ObjectId(id);
+    const normalizedStatus = status.toLowerCase();
+
+    // 1. Try updating chitfunds first
+    let result = await db.collection("chitfunds").updateOne(
       { 
-        _id: new mongoose.Types.ObjectId(id),
-        metalType: department.toLowerCase() // Security: ensure admin can only approve their dept chits
+        _id: objectId,
+        metalType: department.toLowerCase()
       },
-      { $set: { status: status.toLowerCase(), updatedAt: new Date() } }
+      { $set: { status: normalizedStatus, updatedAt: new Date() } }
     );
+
+    // 2. If no chit found, try updating orders (Online Payment Verification)
+    if (result.matchedCount === 0) {
+      const order = await db.collection("orders").findOne({ _id: objectId });
+      
+      if (order) {
+        // Security check: ensure admin can only approve their dept orders
+        if (order.metalType !== department.toLowerCase()) {
+          return res.status(403).json({ message: "Unauthorized to approve this department's payments" });
+        }
+
+        // If approved, update user balance
+        if (normalizedStatus === "approved") {
+          const finalStatus = "success";
+          await db.collection("orders").updateOne(
+            { _id: objectId },
+            { $set: { status: finalStatus, updatedAt: new Date() } }
+          );
+
+          // Update balance
+          const balanceField = order.metalType === "gold" ? "goldBalance" : "silverBalance";
+          const userRef = order.userId || order.user_id || order.user;
+          const userObjectId = mongoose.isValidObjectId(userRef) ? new mongoose.Types.ObjectId(userRef) : null;
+          
+          if (userObjectId) {
+            await db.collection("users").updateOne(
+              { _id: userObjectId },
+              { $inc: { [balanceField]: Number(order.amountPaid || order.amount || 0) } }
+            );
+          }
+          
+          return res.status(200).json({ message: "Payment approved and balance updated" });
+        } else {
+          // Rejected order
+          await db.collection("orders").updateOne(
+            { _id: objectId },
+            { $set: { status: "rejected", updatedAt: new Date() } }
+          );
+          return res.status(200).json({ message: "Payment rejected" });
+        }
+      }
+    }
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ message: "Request not found or unauthorized" });
@@ -643,6 +687,7 @@ const updateRequestStatus = async (req, res) => {
 
     return res.status(200).json({ message: `Request ${status} successfully` });
   } catch (error) {
+    console.error("[updateRequestStatus] Error:", error);
     return res.status(500).json({
       message: "Unable to update request status",
       error: error.message
@@ -708,6 +753,102 @@ const getUsersList = async (req, res) => {
     return res.status(500).json({ 
       message: "Error fetching member directory", 
       error: error.message 
+    });
+  }
+};
+
+const getUserDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = mongoose.connection.db;
+    const userObjectId = new mongoose.Types.ObjectId(id);
+
+    // 1. Fetch User Profile
+    const user = await db.collection("users").findOne({ _id: userObjectId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 2. Fetch User Chits
+    const chits = await db.collection("chitfunds").find({
+      $or: [
+        { userId: id },
+        { userId: userObjectId }
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    // 3. Fetch monthly payments from the 'payments' collection (linked to chits)
+    const monthlyPayments = await db.collection("payments").find({
+      userId: userObjectId
+    }).sort({ createdAt: 1 }).toArray();
+
+    // 4. Group monthly payments by chitId
+    const paymentsByChit = {};
+    monthlyPayments.forEach(p => {
+      const chitKey = p.chitId ? p.chitId.toString() : "unlinked";
+      if (!paymentsByChit[chitKey]) paymentsByChit[chitKey] = [];
+      paymentsByChit[chitKey].push(p);
+    });
+
+    // 5. Total paid across all chits
+    const totalPaid = monthlyPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    // 6. Build formatted chits with per-month payment info
+    const formattedChits = chits.map(c => {
+      const chitId = c._id.toString();
+      const chitPayments = (paymentsByChit[chitId] || []).sort((a, b) => a.monthNumber - b.monthNumber);
+      const duration = c.duration || 12;
+      const totalPaidForChit = chitPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      return {
+        id: c._id,
+        planName: c.planName || "Standard Plan",
+        metalType: (c.metalType || "Gold").toUpperCase(),
+        monthlyAmount: c.monthlyAmount,
+        totalAmount: c.totalAmount || (c.monthlyAmount * duration),
+        duration: duration,
+        status: (c.status || "PENDING").toUpperCase(),
+        createdAt: c.createdAt,
+        txnId: c.txnId,
+        totalPaid: totalPaidForChit,
+        paidMonths: chitPayments.length,
+        payments: chitPayments.map(p => ({
+          id: p._id,
+          monthNumber: p.monthNumber,
+          amount: p.amount,
+          paidAt: p.paidAt || p.createdAt,
+          txnId: p.txnId,
+          paymentMethod: p.paymentMethod || "manual",
+          notes: p.notes || null
+        }))
+      };
+    });
+
+    const details = {
+      profile: {
+        id: id,
+        displayId: id.slice(-6).toUpperCase(),
+        name: user.name || "Anonymous Member",
+        email: user.email,
+        mobile: user.mobile,
+        role: user.role,
+        department: user.department,
+        joinedAt: user.createdAt
+      },
+      stats: {
+        totalChits: chits.length,
+        activeChits: chits.filter(c => ["approved", "active"].includes((c.status || "").toLowerCase())).length,
+        totalPaid: totalPaid,
+        totalPayments: monthlyPayments.length
+      },
+      chits: formattedChits
+    };
+
+    return res.status(200).json(details);
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error fetching user details",
+      error: error.message
     });
   }
 };
@@ -802,7 +943,7 @@ const manualCreateUser = async (req, res) => {
 
 const manualAssignChit = async (req, res) => {
   try {
-    const { userId, metalType, monthlyAmount, planName } = req.body;
+    const { userId, metalType, monthlyAmount, planName, duration } = req.body;
     const adminDept = req.user?.department;
 
     if (!userId || !monthlyAmount) {
@@ -817,6 +958,7 @@ const manualAssignChit = async (req, res) => {
       metalType: type.toLowerCase(),
       planName: planName || undefined,
       monthlyAmount: Number(monthlyAmount),
+      duration: Number(duration) || 12,
       status: "approved",
       txnId: `MAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       createdAt: new Date(),
@@ -837,42 +979,87 @@ const manualAssignChit = async (req, res) => {
 
 const manualAddPayment = async (req, res) => {
   try {
-    const { userId, amount, metalType } = req.body;
+    console.log("[manualAddPayment] Request Body:", JSON.stringify(req.body, null, 2));
+    const { userId, chitId, amount, metalType, monthNumber, txnId, notes } = req.body;
     const adminDept = req.user?.department;
 
-    if (!userId || !amount) {
-      return res.status(400).json({ message: "UserId and amount are required" });
+    if (!userId || !mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ message: "A valid UserId is required" });
     }
 
+    if (!amount || isNaN(Number(amount))) {
+      return res.status(400).json({ message: "A valid payment amount is required" });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const resolvedChitId = chitId && mongoose.isValidObjectId(chitId) ? new mongoose.Types.ObjectId(chitId) : null;
+    
     const db = mongoose.connection.db;
     const type = metalType || adminDept || "gold";
 
+    // Auto-calculate month number if not provided
+    let month = monthNumber ? Number(monthNumber) : null;
+    if (!month) {
+      if (resolvedChitId) {
+        const existingCount = await db.collection("payments").countDocuments({
+          chitId: resolvedChitId
+        });
+        month = existingCount + 1;
+      } else {
+        const existingCount = await db.collection("payments").countDocuments({
+          userId: userObjectId
+        });
+        month = existingCount + 1;
+      }
+    }
+
+    const autoTxnId = txnId || `MAN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // Save to 'payments' collection (per-month tracking)
     const newPayment = {
-      userId: new mongoose.Types.ObjectId(userId),
+      userId: userObjectId,
+      chitId: resolvedChitId,
+      amount: Number(amount),
+      monthNumber: month,
+      metalType: type.toLowerCase(),
+      paymentMethod: "manual",
+      txnId: autoTxnId,
+      notes: notes || null,
+      paidAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection("payments").insertOne(newPayment);
+
+    // Also record in orders for backward compatibility with payment history screen
+    await db.collection("orders").insertOne({
+      userId: userObjectId,
+      orderId: autoTxnId, // Set orderId to avoid duplicate null key error (E11000)
       amountPaid: Number(amount),
       metalType: type.toLowerCase(),
       metalName: type.toLowerCase() === "gold" ? "Gold" : "Silver",
       status: "success",
       paymentMethod: "manual",
+      txnId: autoTxnId,
       createdAt: new Date(),
       updatedAt: new Date()
-    };
+    });
 
-    const result = await db.collection("orders").insertOne(newPayment);
-
-    // Update user's balance in the users collection
+    // Update user's balance
     const balanceField = type.toLowerCase() === "gold" ? "goldBalance" : "silverBalance";
     await db.collection("users").updateOne(
-      { _id: new mongoose.Types.ObjectId(userId) },
+      { _id: userObjectId },
       { $inc: { [balanceField]: Number(amount) } }
     );
 
     return res.status(201).json({
-      message: "Payment recorded successfully",
+      message: `Month ${month} payment recorded successfully`,
       paymentId: result.insertedId,
       payment: newPayment
     });
   } catch (error) {
+    console.error("[manualAddPayment] Error:", error);
     return res.status(500).json({ message: "Unable to record payment", error: error.message });
   }
 };
@@ -901,38 +1088,6 @@ const getPaymentHistory = async (req, res) => {
         },
         { $sort: { createdAt: -1 } },
         { $limit: 200 },
-
-        // ── Merge Approved Chits ──────────────────────────────────────
-        // This brings in both manual and online chits once they are
-        // approved/active, so they show up in the payment timeline.
-        {
-          $unionWith: {
-            coll: "chitfunds",
-            pipeline: [
-              {
-                $match: {
-                  metalType: normalizedDepartment,
-                  status: { $in: ["approved", "active"] }
-                }
-              },
-              {
-                $project: {
-                  _id: 1,
-                  userId: 1,
-                  amountPaid: "$monthlyAmount",
-                  metalType: 1,
-                  status: 1,
-                  paymentMethod: { $literal: "manual" },
-                  createdAt: 1,
-                  txnId: 1
-                }
-              }
-            ]
-          }
-        },
-
-        // Sort again after merging
-        { $sort: { createdAt: -1 } },
 
         // ── Resolve the user reference field ──────────────────────────
         // Different apps store the user reference differently.
@@ -1041,13 +1196,7 @@ const getPaymentHistory = async (req, res) => {
             amountPaid: { $ifNull: ["$amountPaid", { $ifNull: ["$amount", 0] }] },
             metalType: 1,
             metalName: 1,
-            status: { 
-              $cond: [
-                { $in: [{ $toLower: "$status" }, ["approved", "active"]] },
-                "success",
-                { $ifNull: ["$status", "unknown"] }
-              ]
-            },
+            status: { $ifNull: ["$status", "unknown"] },
             paymentMethod: { $ifNull: ["$paymentMethod", { $ifNull: ["$method", "online"] }] },
             createdAt: 1,
             txnId: {
@@ -1064,17 +1213,16 @@ const getPaymentHistory = async (req, res) => {
           }
         },
 
-        // Filter for success/approved only
         {
           $match: {
-            status: { $regex: /^(success|paid|completed|captured|approved|active)$/i }
+            status: { $regex: /^(success|paid|completed|captured)$/i }
           }
         }
       ])
       .toArray();
 
     // Compute summary stats (all these statuses represent successful collection)
-    const successStatuses = ["success", "paid", "completed", "captured", "approved", "active"];
+    const successStatuses = ["success", "paid", "completed", "captured"];
     const totalCollected = payments
       .filter(p => successStatuses.includes((p.status || "").toLowerCase()))
       .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
@@ -1262,12 +1410,53 @@ const getActiveUPIPublic = async (req, res) => {
   }
 };
 
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = mongoose.connection.db;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid User ID format" });
+    }
+
+    const userId = new mongoose.Types.ObjectId(id);
+
+    // Perform deletions across all related collections
+    const deleteResults = await Promise.all([
+      db.collection("users").deleteOne({ _id: userId }),
+      db.collection("chitfunds").deleteMany({ userId: userId }),
+      db.collection("payments").deleteMany({ userId: userId }),
+      db.collection("orders").deleteMany({ userId: userId }),
+      db.collection("chitrequests").deleteMany({ userId: userId })
+    ]);
+
+    const userDeleted = deleteResults[0].deletedCount > 0;
+
+    if (!userDeleted) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ 
+      message: "User and all associated data deleted successfully",
+      summary: {
+        chits: deleteResults[1].deletedCount,
+        payments: deleteResults[2].deletedCount,
+        orders: deleteResults[3].deletedCount
+      }
+    });
+  } catch (error) {
+    console.error("[deleteUser] Error:", error);
+    return res.status(500).json({ message: "Failed to delete user", error: error.message });
+  }
+};
+
 module.exports = {
   getDashboard,
   getPendingRequests,
   getActiveChits,
   updateRequestStatus,
   getUsersList,
+  getUserDetails,
   updateMetalRate,
   manualCreateUser,
   manualAssignChit,
@@ -1278,5 +1467,6 @@ module.exports = {
   setActiveUPI,
   deleteUPI,
   getActiveUPIPublic,
-  debugOrders
+  debugOrders,
+  deleteUser
 };

@@ -98,6 +98,28 @@ export const getAllUsers = async (token) => {
   }
 };
 
+export const getUserDetails = async (token, userId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/admin/users/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
+export const deleteMember = async (token, userId) => {
+  try {
+    const response = await api.delete(`/admin/users/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
 export const updateMetalRate = async (token, payload) => {
   try {
     const response = await api.post("/admin/rate", payload, {

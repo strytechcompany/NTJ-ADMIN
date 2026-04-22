@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import BottomTab from "../components/dashboard/BottomTab";
-import { getAllUsers, manualCreateUser, manualAssignChit, manualAddPayment } from "../services/api";
+import { getAllUsers, getUserDetails, manualCreateUser, manualAssignChit, manualAddPayment } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
 
 const THEME = {
@@ -36,7 +36,9 @@ export default function ChitsScreen() {
   const [session, setSession] = useState(null);
   const [users, setUsers] = useState([]);
   const [showUserPicker, setShowUserPicker] = useState(false);
+  const [showChitPicker, setShowChitPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userChits, setUserChits] = useState([]);
 
   const [form, setForm] = useState({
     name: "",
@@ -44,8 +46,11 @@ export default function ChitsScreen() {
     email: "",
     userId: "",
     userName: "Select User",
+    chitId: "",
+    chitName: "Select Chit (Optional)",
     planName: "",
     monthlyAmount: "",
+    duration: "12",
     amount: "",
     metalType: "gold"
   });
@@ -69,6 +74,17 @@ export default function ChitsScreen() {
     }
   };
 
+  const fetchUserChits = async (userId) => {
+    if (!session?.token || !userId) return;
+    try {
+      const details = await getUserDetails(session.token, userId);
+      setUserChits(details?.chits || []);
+    } catch (err) {
+      console.log("Fetch user chits error:", err);
+      setUserChits([]);
+    }
+  };
+
   useEffect(() => {
     if (activeSegment !== "Create User") {
       fetchUsers();
@@ -76,14 +92,18 @@ export default function ChitsScreen() {
   }, [activeSegment]);
 
   const resetForm = () => {
+    setUserChits([]);
     setForm({
       name: "",
       mobile: "",
       email: "",
       userId: "",
       userName: "Select User",
+      chitId: "",
+      chitName: "Select Chit (Optional)",
       planName: "",
       monthlyAmount: "",
+      duration: "12",
       amount: "",
       metalType: session?.department || "gold"
     });
@@ -107,12 +127,14 @@ export default function ChitsScreen() {
           userId: form.userId,
           planName: form.planName,
           monthlyAmount: form.monthlyAmount,
+          duration: form.duration,
           metalType: form.metalType
         });
       } else if (activeSegment === "Add Payment") {
         if (!form.userId || !form.amount) throw new Error("User and Amount are required");
         res = await manualAddPayment(session.token, {
           userId: form.userId,
+          chitId: form.chitId || undefined,
           amount: form.amount,
           metalType: form.metalType
         });
@@ -132,6 +154,59 @@ export default function ChitsScreen() {
   const filteredUsers = users.filter(u => 
     u.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
     u.mobile?.includes(searchQuery)
+  );
+
+  const renderChitPicker = () => (
+    <Modal visible={showChitPicker} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Chit Plan</Text>
+            <TouchableOpacity onPress={() => setShowChitPicker(false)}>
+              <MaterialCommunityIcons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.userItem, { paddingVertical: 20 }]}
+            onPress={() => {
+              setForm({ ...form, chitId: "", chitName: "No specific chit" });
+              setShowChitPicker(false);
+            }}
+          >
+            <View>
+              <Text style={styles.userItemName}>No specific chit</Text>
+              <Text style={styles.userItemMobile}>General payment</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color="#ccc" />
+          </TouchableOpacity>
+          <FlatList
+            data={userChits}
+            keyExtractor={item => item.id?.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.userItem}
+                onPress={() => {
+                  setForm({ 
+                    ...form, 
+                    chitId: item.id?.toString(), 
+                    chitName: `${item.planName} (${item.metalType})`,
+                    metalType: (item.metalType || "gold").toLowerCase()
+                  });
+                  setShowChitPicker(false);
+                }}
+              >
+                <View>
+                  <Text style={styles.userItemName}>{item.planName}</Text>
+                  <Text style={styles.userItemMobile}>{item.metalType} • ₹{item.monthlyAmount}/mo • {item.paidMonths || 0}/{item.duration || 12} paid</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#ccc" />
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={styles.emptySearch}>No chits found for this user</Text>}
+          />
+        </View>
+      </View>
+    </Modal>
   );
 
   const renderUserPicker = () => (
@@ -157,7 +232,8 @@ export default function ChitsScreen() {
               <TouchableOpacity 
                 style={styles.userItem}
                 onPress={() => {
-                  setForm({ ...form, userId: item.realId, userName: item.name });
+                  setForm({ ...form, userId: item.realId, userName: item.name, chitId: "", chitName: "Select Chit (Optional)" });
+                  fetchUserChits(item.realId);
                   setShowUserPicker(false);
                 }}
               >
@@ -241,8 +317,26 @@ export default function ChitsScreen() {
               onChangeText={(t) => setForm({ ...form, planName: t })}
             />
           </View>
+
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>MONTHLY COMMITMENT</Text>
+            <Text style={styles.label}>CHIT DURATION (MONTHS)</Text>
+            <View style={styles.radioGroup}>
+              {["10", "12", "24", "36"].map(d => (
+                <TouchableOpacity 
+                  key={d}
+                  style={[styles.radioItem, form.duration === d && styles.radioActive]}
+                  onPress={() => setForm({...form, duration: d})}
+                >
+                  <Text style={[styles.radioText, form.duration === d && styles.radioTextActive]}>
+                    {d} MO
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>MONTHLY SAVING AMOUNT</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. 5000"
@@ -286,6 +380,19 @@ export default function ChitsScreen() {
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={20} color="#b18a0b" />
             </TouchableOpacity>
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>SELECT CHIT PLAN</Text>
+            <TouchableOpacity 
+              style={[styles.pickerTrigger, !form.userId && { opacity: 0.5 }]}
+              onPress={() => form.userId && setShowChitPicker(true)}
+            >
+              <Text style={[styles.pickerText, form.chitId ? { color: '#1c1610' } : { color: '#b0a89c' }]}>
+                {form.chitName}
+              </Text>
+              <MaterialCommunityIcons name="chevron-down" size={20} color="#b18a0b" />
+            </TouchableOpacity>
+            {!form.userId && <Text style={styles.helperText}>Select a participant first</Text>}
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>PAYMENT AMOUNT (₹)</Text>
@@ -403,6 +510,7 @@ export default function ChitsScreen() {
       </ScrollView>
 
       {renderUserPicker()}
+      {renderChitPicker()}
 
       {/* Fixed Bottom Tab */}
       <View style={styles.bottomTabWrapper}>
@@ -699,5 +807,11 @@ const styles = StyleSheet.create({
     marginTop: 40,
     color: "#b0a89c",
     fontSize: 16
+  },
+  helperText: {
+    fontSize: 11,
+    color: "#b0a89c",
+    marginTop: 6,
+    fontStyle: "italic"
   }
 });

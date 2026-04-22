@@ -95,22 +95,35 @@ function RequestCard({ request, onApprove, onReject, isProcessing }) {
         </View>
       </View>
 
-      {/* Chit Details Box */}
+      {/* Chit/Payment Details Box */}
       <View style={[styles.chitDetailBox, { backgroundColor: metalBg }]}>
         <View style={styles.chitDetailRow}>
           <View>
-            <Text style={styles.chitDetailLabel}>REQUESTED CHIT</Text>
+            <Text style={styles.chitDetailLabel}>
+              {request.requestType === "payment" ? "VERIFY PAYMENT" : "REQUESTED CHIT"}
+            </Text>
             <Text style={[styles.chitDetailValue, { color: metalColor }]}>
-              ₹{(request.monthlyAmount || 0).toLocaleString("en-IN")}/month
+              ₹{(request.monthlyAmount || 0).toLocaleString("en-IN")}
+              {request.requestType === "payment" ? "" : "/month"}
             </Text>
           </View>
           <View style={[styles.metalBadge, { backgroundColor: metalColor }]}>
             <Text style={styles.metalBadgeText}>{metal.toUpperCase()}</Text>
           </View>
         </View>
+
+        {request.requestType === "payment" && (
+          <View style={styles.paymentHint}>
+            <MaterialCommunityIcons name="information-outline" size={12} color="#856a00" />
+            <Text style={styles.paymentHintText}>Verify credit in bank before approval</Text>
+          </View>
+        )}
+
         {(request.planName || request.requestName) ? (
           <View style={styles.chitSubRow}>
-            <Text style={styles.chitSubLabel}>PLAN NAME</Text>
+            <Text style={styles.chitSubLabel}>
+              {request.requestType === "payment" ? "DESCRIPTION" : "PLAN NAME"}
+            </Text>
             <Text style={styles.chitSubValue}>
               {request.planName || request.requestName}
             </Text>
@@ -196,7 +209,7 @@ export default function RequestsScreen() {
     const label = status === "approved" ? "Approve" : "Reject";
     Alert.alert(
       `Confirm ${label}`,
-      `Are you sure you want to ${status} this chit request?`,
+      `Are you sure you want to ${status} this ${request.requestType === "payment" ? "payment transaction" : "chit request"}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -723,6 +736,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#3d3624"
+  },
+
+  paymentHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    backgroundColor: "rgba(133,106,0,0.08)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: "flex-start"
+  },
+  paymentHintText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#856a00"
   },
 
   // Bottom Tab

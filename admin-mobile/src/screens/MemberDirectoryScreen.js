@@ -215,7 +215,12 @@ export default function MemberDirectoryScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator size="large" color={THEME.accentStrong} style={{ marginTop: 40 }} />
           ) : filteredMembers.map((member) => (
-            <MemberCard key={member.realId} member={member} />
+            <Pressable 
+              key={member.realId} 
+              onPress={() => navigation.navigate("UserDetail", { userId: member.realId })}
+            >
+              <MemberCard member={member} />
+            </Pressable>
           ))}
           {!loading && filteredMembers.length === 0 && (
             <View style={styles.emptyState}>
