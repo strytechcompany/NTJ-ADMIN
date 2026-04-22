@@ -14,7 +14,7 @@ export default function MarketCard({ theme, rate, currency, metalType, onEdit })
       <View style={styles.headerRow}>
         <View style={styles.titleGroup}>
           <Text style={styles.title}>DAILY {metalType?.toUpperCase()} RATE</Text>
-          <View style={[styles.badge, { backgroundColor: "rgba(177, 138, 11, 0.15)" }]}>
+          <View style={[styles.badge, { backgroundColor: theme.accentStrong + "26" }]}>
             <Text style={[styles.badgeText, { color: theme.accentStrong }]}>LIVE</Text>
           </View>
         </View>

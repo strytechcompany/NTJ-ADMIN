@@ -1,0 +1,38 @@
+export const THEMES = {
+  gold: {
+    page: "#f8f3e9",
+    card: "#ffffff",
+    surface: "#f4ede2",
+    accentStrong: "#b18a0b",
+    accentSoft: "#d8bc61",
+    muted: "#6c6257",
+    revenueGradient: ["#8e7200", "#b48b08", "#d6b12f"],
+    marketCard: "#f3ede2",
+    negative: "#c11d1d",
+    inputBg: "#f2ede2",
+    insightBg: "#f4eccd",
+    queueBg: "#f3f0e8",
+    integrityBg: "#f8f1df",
+    assistanceBg: "#e0dad0",
+    isGold: true,
+    isSilver: false
+  },
+  silver: {
+    page: "#f2f4f6",
+    card: "#ffffff",
+    surface: "#e9edf2",
+    accentStrong: "#73808b",
+    accentSoft: "#aeb8c1",
+    muted: "#5f6870",
+    revenueGradient: ["#5f6972", "#7e8a95", "#9faab5"],
+    marketCard: "#e9edf2",
+    negative: "#c11d1d",
+    inputBg: "#e9edf2",
+    insightBg: "#eef1f4",
+    queueBg: "#eef0f3",
+    integrityBg: "#eef0f3",
+    assistanceBg: "#d8dee4",
+    isGold: false,
+    isSilver: true
+  }
+};

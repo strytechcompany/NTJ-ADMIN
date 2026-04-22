@@ -16,17 +16,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BottomTab from "../components/dashboard/BottomTab";
 import { getAllUsers } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
-const THEME = {
-  page: "#f8f3e9",
-  card: "#ffffff",
-  surface: "#f4ede2",
-  accentStrong: "#b18a0b",
-  accentSoft: "#d8bc61",
-  muted: "#6c6257"
-};
-
-function AvatarBubble({ member }) {
+function AvatarBubble({ member, theme }) {
+  const THEME = theme;
   if (member.hasImage && member.image) {
     return (
       <Image
@@ -42,19 +36,20 @@ function AvatarBubble({ member }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, theme }) {
+  const THEME = theme;
   const isVerified = status === "VERIFIED";
   return (
     <View
       style={[
         styles.statusBadge,
-        { backgroundColor: isVerified ? "#edf3ff" : "#fff6e0" }
+        { backgroundColor: isVerified ? (THEME.isSilver ? "#e3f2fd" : "#edf3ff") : (THEME.isSilver ? "#eef0f3" : "#fff6e0") }
       ]}
     >
       <Text
         style={[
           styles.statusText,
-          { color: isVerified ? "#4a6fc8" : "#b18a0b" }
+          { color: isVerified ? (THEME.isSilver ? "#1976d2" : "#4a6fc8") : THEME.accentStrong }
         ]}
       >
         {status}
@@ -63,14 +58,15 @@ function StatusBadge({ status }) {
   );
 }
 
-function MemberCard({ member }) {
+function MemberCard({ member, theme }) {
+  const THEME = theme;
   return (
-    <View style={styles.memberCard}>
-      <AvatarBubble member={member} />
+    <View style={[styles.memberCard, { backgroundColor: THEME.card }]}>
+      <AvatarBubble member={member} theme={THEME} />
       <View style={styles.memberInfo}>
         <View style={styles.memberTopRow}>
-          <Text style={styles.memberName}>{member.name}</Text>
-          <StatusBadge status={member.status} />
+          <Text style={[styles.memberName, { color: "#1c1610" }]}>{member.name}</Text>
+          <StatusBadge status={member.status} theme={THEME} />
         </View>
         <View style={styles.memberBottomRow}>
           <Text style={styles.memberId}>ID: #{member.id}</Text>
@@ -92,19 +88,23 @@ export default function MemberDirectoryScreen({ navigation }) {
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [session, setSession] = useState(null);
+  const [theme, setTheme] = useState(THEMES.gold);
 
   const fetchMembers = useCallback(async (isRefreshing = false) => {
     try {
       if (isRefreshing) setRefreshing(true);
       else setLoading(true);
 
-      const session = await getPersistedSession();
-      if (!session?.token) {
+      const s = await getPersistedSession();
+      if (!s?.token) {
         Alert.alert("Authentication Required", "Please log in to manage members.");
         return;
       }
+      setSession(s);
+      setTheme(THEMES[s.department] || THEMES.gold);
 
-      const data = await getAllUsers(session.token);
+      const data = await getAllUsers(s.token);
       setMembers(data || []);
     } catch (err) {
       console.log("Fetch members error:", err);
@@ -130,9 +130,11 @@ export default function MemberDirectoryScreen({ navigation }) {
   const totalMembers = members.length;
   const activeChits = members.reduce((sum, m) => sum + (m.activeChits || 0), 0);
   const pendingKyc = members.filter(m => m.status === "PENDING").length || 0;
+  const THEME = theme;
+  const department = session?.department || "gold";
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -149,9 +151,9 @@ export default function MemberDirectoryScreen({ navigation }) {
             <Text style={styles.headerTitle}>NTJ Admin</Text>
           </View>
           <View style={styles.headerRight}>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeTop}>GOLD</Text>
-              <Text style={styles.roleBadgeBottom}>OVERSIGHT</Text>
+            <View style={[styles.roleBadge, { backgroundColor: THEME.accentSoft + "40" }]}>
+              <Text style={[styles.roleBadgeTop, { color: THEME.accentStrong }]}>{department.toUpperCase()}</Text>
+              <Text style={[styles.roleBadgeBottom, { color: THEME.accentStrong }]}>OVERSIGHT</Text>
             </View>
             <Pressable style={styles.bellBtn}>
               <MaterialCommunityIcons name="bell" size={24} color="#333" />
@@ -177,9 +179,9 @@ export default function MemberDirectoryScreen({ navigation }) {
         </View>
 
         {/* Total Members card */}
-        <View style={styles.totalCard}>
+        <View style={[styles.totalCard, { backgroundColor: THEME.card }]}>
           <Text style={styles.totalLabel}>Total Members</Text>
-          <Text style={styles.totalValue}>
+          <Text style={[styles.totalValue, { color: THEME.accentStrong }]}>
             {totalMembers.toLocaleString("en-IN") || "0"}
           </Text>
           <View style={styles.growthBadge}>
@@ -187,13 +189,12 @@ export default function MemberDirectoryScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Stat row */}
         <View style={styles.statRow}>
-          <View style={[styles.statCard, { marginRight: 16 }]}>
+          <View style={[styles.statCard, { marginRight: 16, backgroundColor: THEME.surface }]}>
             <Text style={styles.statLabel}>Active Chits</Text>
             <Text style={styles.statValue}>{activeChits}</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: THEME.surface }]}>
             <Text style={styles.statLabel}>Pending KYC</Text>
             <Text style={styles.statValue}>{pendingKyc}</Text>
           </View>
@@ -202,11 +203,11 @@ export default function MemberDirectoryScreen({ navigation }) {
         {/* Directory header */}
         <View style={styles.dirHeader}>
           <View>
-            <Text style={styles.dirTitle}>MEMBER DIRECTORY</Text>
+            <Text style={[styles.dirTitle, { color: THEME.accentStrong }]}>MEMBER DIRECTORY</Text>
             <Text style={styles.dirSubtitle}>Managing high-value custodians</Text>
           </View>
           <Pressable>
-            <Text style={styles.viewReports}>View Reports ↗</Text>
+            <Text style={[styles.viewReports, { color: THEME.accentStrong }]}>View Reports ↗</Text>
           </Pressable>
         </View>
 
@@ -219,7 +220,7 @@ export default function MemberDirectoryScreen({ navigation }) {
               key={member.realId} 
               onPress={() => navigation.navigate("UserDetail", { userId: member.realId })}
             >
-              <MemberCard member={member} />
+              <MemberCard member={member} theme={THEME} />
             </Pressable>
           ))}
           {!loading && filteredMembers.length === 0 && (
@@ -291,7 +292,6 @@ const styles = StyleSheet.create({
     gap: 12
   },
   roleBadge: {
-    backgroundColor: "#ffdf8e",
     borderRadius: 30,
     paddingHorizontal: 18,
     paddingVertical: 12,
@@ -307,7 +307,6 @@ const styles = StyleSheet.create({
   roleBadgeBottom: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#7a5c00",
     letterSpacing: 1
   },
   bellBtn: {
@@ -375,7 +374,6 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 48,
     fontWeight: "800",
-    color: "#b18a0b",
     marginVertical: 6
   },
   growthBadge: {
@@ -399,7 +397,6 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#f5f0e6",
     borderRadius: 20,
     padding: 22,
     borderWidth: 1,
@@ -427,7 +424,6 @@ const styles = StyleSheet.create({
   dirTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#856b1a",
     letterSpacing: 2
   },
   dirSubtitle: {
@@ -438,8 +434,7 @@ const styles = StyleSheet.create({
   },
   viewReports: {
     fontSize: 15,
-    fontWeight: "700",
-    color: "#b18a0b"
+    fontWeight: "700"
   },
 
   // Member list

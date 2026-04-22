@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, CommonActions } from "@react-navigation/native";
 import { Alert, TouchableOpacity, StyleSheet, Text, View } from "react-native";
+import { getPersistedSession } from "../../utils/storage";
 
 const TABS = [
   { name: "Dashboard", icon: "view-dashboard-outline", activeIcon: "view-dashboard" },
@@ -13,10 +14,13 @@ const TABS = [
 export default function BottomTab({ theme, activeTab = "Dashboard" }) {
   const navigation = useNavigation();
 
-  const handlePress = (tabName) => {
-    // console.log("Tab pressed:", tabName);
+  const handlePress = async (tabName) => {
+    let routeName = tabName;
     
-    const routeName = tabName === "Dashboard" ? "GoldDashboard" : tabName;
+    if (tabName === "Dashboard") {
+      const session = await getPersistedSession();
+      routeName = session.department === "silver" ? "SilverDashboard" : "GoldDashboard";
+    }
     
     try {
       navigation.dispatch(

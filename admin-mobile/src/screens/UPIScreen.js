@@ -14,33 +14,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchUPIs, createUPI, toggleUPIActive, removeUPI } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
+import { THEMES } from "../utils/themes";
 
-const THEMES = {
-  gold: {
-    page: "#f8f3e9",
-    card: "#ffffff",
-    accent: "#b18a0b",
-    muted: "#6c6257",
-    success: "#2d8a39",
-    danger: "#c11d1d",
-    surface: "#f4ede2",
-    input: "#fbf8f3"
-  },
-  silver: {
-    page: "#f2f4f6",
-    card: "#ffffff",
-    accent: "#73808b",
-    muted: "#5f6870",
-    success: "#2d8a39",
-    danger: "#c11d1d",
-    surface: "#e9edf2",
-    input: "#f6f8f9"
-  }
-};
 
 export default function UPIScreen({ navigation, route }) {
-  const department = route.params?.department || "gold";
-  const theme = THEMES[department];
+  const [theme, setTheme] = useState(THEMES.gold);
+  const [department, setDepartment] = useState("gold");
 
   const [upis, setUpis] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +32,8 @@ export default function UPIScreen({ navigation, route }) {
     try {
       setLoading(true);
       const session = await getPersistedSession();
+      setDepartment(session.department || "gold");
+      setTheme(THEMES[session.department] || THEMES.gold);
       const data = await fetchUPIs(session.token);
       setUpis(data);
     } catch (error) {
@@ -126,7 +107,7 @@ export default function UPIScreen({ navigation, route }) {
           <Text style={[styles.upiId, { color: theme.muted }]}>{item.upiId}</Text>
         </View>
         <TouchableOpacity onPress={() => handleDelete(item._id)}>
-          <Ionicons name="trash-outline" size={20} color={theme.danger} />
+          <Ionicons name="trash-outline" size={20} color={theme.danger || "#c11d1d"} />
         </TouchableOpacity>
       </View>
 
@@ -143,7 +124,7 @@ export default function UPIScreen({ navigation, route }) {
             style={[styles.activateBtn, { backgroundColor: theme.surface }]}
             onPress={() => handleToggleActive(item._id, item.isActive)}
           >
-            <Text style={[styles.activateBtnText, { color: theme.accent }]}>SET ACTIVE</Text>
+            <Text style={[styles.activateBtnText, { color: theme.accentStrong || theme.accent }]}>SET ACTIVE</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -154,10 +135,10 @@ export default function UPIScreen({ navigation, route }) {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.page }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={28} color={theme.accent} />
+          <Ionicons name="chevron-back" size={28} color={theme.accentStrong || theme.accent} />
         </TouchableOpacity>
         <Text style={styles.title}>UPI Management</Text>
-        <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.accent }]} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.accentStrong || theme.accent }]} onPress={() => setModalVisible(true)}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -193,7 +174,7 @@ export default function UPIScreen({ navigation, route }) {
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.muted }]}>Display Name (e.g. Primary HDFC)</Text>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.input }]}
+                style={[styles.input, { backgroundColor: theme.inputBg || "#f0f0f0" }]}
                 value={newLabel}
                 onChangeText={setNewLabel}
                 placeholder="Business Name"
@@ -203,7 +184,7 @@ export default function UPIScreen({ navigation, route }) {
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.muted }]}>UPI VPA ID</Text>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.input }]}
+                style={[styles.input, { backgroundColor: theme.inputBg || "#f0f0f0" }]}
                 value={newUpiId}
                 onChangeText={setNewUpiId}
                 placeholder="example@upi"
@@ -220,7 +201,7 @@ export default function UPIScreen({ navigation, route }) {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: theme.accent }]}
+                style={[styles.modalBtn, { backgroundColor: theme.accentStrong || theme.accent }]}
                 onPress={handleAddUPI}
                 disabled={submitting}
               >

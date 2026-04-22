@@ -18,31 +18,8 @@ import StatCard from "../components/dashboard/StatCard";
 import RateEditorModal from "../components/dashboard/RateEditorModal";
 import { getDashboard, updateMetalRate } from "../services/api";
 import { clearSession, getPersistedSession } from "../utils/storage";
-
-const THEMES = {
-  gold: {
-    page: "#f8f3e9",
-    card: "#ffffff",
-    surface: "#f4ede2",
-    accentStrong: "#b18a0b",
-    accentSoft: "#d8bc61",
-    muted: "#6c6257",
-    revenueGradient: ["#8e7200", "#b48b08", "#d6b12f"],
-    marketCard: "#f3ede2",
-    negative: "#c11d1d"
-  },
-  silver: {
-    page: "#f2f4f6",
-    card: "#ffffff",
-    surface: "#e9edf2",
-    accentStrong: "#73808b",
-    accentSoft: "#aeb8c1",
-    muted: "#5f6870",
-    revenueGradient: ["#5f6972", "#7e8a95", "#9faab5"],
-    marketCard: "#e9edf2",
-    negative: "#c11d1d"
-  }
-};
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
 const formatNumber = (value) => new Intl.NumberFormat("en-IN").format(Number(value || 0));
 

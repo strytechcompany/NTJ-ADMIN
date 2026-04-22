@@ -15,15 +15,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BottomTab from "../components/dashboard/BottomTab";
 import { getPaymentHistory } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
-
-const THEME = {
-  page: "#f8f3e9",
-  card: "#ffffff",
-  surface: "#f4ede2",
-  accentStrong: "#b18a0b",
-  accentSoft: "#d8bc61",
-  muted: "#6c6257"
-};
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
 // ────────────────────────────────────────────────────────────────
 // Helpers
@@ -49,10 +42,10 @@ const formatTime = (dateStr) => {
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 };
 
-const getStatusColor = (status) => {
+const getStatusColor = (status, theme) => {
   const s = (status || "").toLowerCase();
   if (s === "success") return { bg: "#e6f4ea", text: "#1e7e34" };
-  if (s === "pending") return { bg: "#fff8e1", text: "#b18a0b" };
+  if (s === "pending") return { bg: theme.isSilver ? "#eef0f3" : "#fff8e1", text: theme.accentStrong };
   if (s === "failed") return { bg: "#fdecea", text: "#c0392b" };
   return { bg: "#f0f0f0", text: "#555" };
 };
@@ -77,13 +70,14 @@ const getInitials = (name) =>
 // ────────────────────────────────────────────────────────────────
 // Sub-components
 // ────────────────────────────────────────────────────────────────
-function SummaryCard({ totalCollected, totalTransactions, pendingCount }) {
+function SummaryCard({ totalCollected, totalTransactions, pendingCount, theme }) {
+  const THEME = theme;
   return (
-    <View style={styles.summaryCard}>
+    <View style={[styles.summaryCard, { backgroundColor: THEME.isSilver ? "#2c3e50" : "#1c1610" }]}>
       <View style={styles.summaryTop}>
         <View>
-          <Text style={styles.summaryLabel}>Total Collected</Text>
-          <Text style={styles.summaryAmount}>{formatAmount(totalCollected)}</Text>
+          <Text style={[styles.summaryLabel, { color: THEME.isSilver ? "#bdc3c7" : "#a09274" }]}>Total Collected</Text>
+          <Text style={[styles.summaryAmount, { color: THEME.isSilver ? "#ecf0f1" : "#d8bc61" }]}>{formatAmount(totalCollected)}</Text>
         </View>
         <View style={styles.summaryBadge}>
           <MaterialCommunityIcons name="trending-up" size={18} color="#1e7e34" />
@@ -94,15 +88,15 @@ function SummaryCard({ totalCollected, totalTransactions, pendingCount }) {
         <View style={styles.summaryMini}>
           <MaterialCommunityIcons name="receipt" size={18} color={THEME.accentStrong} />
           <View style={{ marginLeft: 8 }}>
-            <Text style={styles.miniLabel}>Transactions</Text>
+            <Text style={[styles.miniLabel, { color: THEME.isSilver ? "#95a5a6" : "#9a8970" }]}>Transactions</Text>
             <Text style={styles.miniVal}>{totalTransactions}</Text>
           </View>
         </View>
         <View style={[styles.summaryMini, { marginLeft: 16 }]}>
-          <MaterialCommunityIcons name="clock-outline" size={18} color="#b18a0b" />
+          <MaterialCommunityIcons name="clock-outline" size={18} color={THEME.isSilver ? "#ecf0f1" : "#b18a0b"} />
           <View style={{ marginLeft: 8 }}>
-            <Text style={styles.miniLabel}>Pending</Text>
-            <Text style={[styles.miniVal, { color: "#b18a0b" }]}>{pendingCount}</Text>
+            <Text style={[styles.miniLabel, { color: THEME.isSilver ? "#95a5a6" : "#9a8970" }]}>Pending</Text>
+            <Text style={[styles.miniVal, { color: THEME.isSilver ? "#ecf0f1" : "#b18a0b" }]}>{pendingCount}</Text>
           </View>
         </View>
       </View>
@@ -110,21 +104,23 @@ function SummaryCard({ totalCollected, totalTransactions, pendingCount }) {
   );
 }
 
-function FilterChip({ label, active, onPress }) {
+function FilterChip({ label, active, onPress, theme }) {
+  const THEME = theme;
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
+      style={[styles.chip, { backgroundColor: THEME.surface, borderColor: THEME.surface }, active && { backgroundColor: THEME.isSilver ? "#2c3e50" : "#1c1610", borderColor: THEME.isSilver ? "#2c3e50" : "#1c1610" }]}
     >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+      <Text style={[styles.chipText, { color: THEME.muted }, active && { color: THEME.isSilver ? "#ecf0f1" : "#d8bc61" }]}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-function PaymentCard({ payment }) {
-  const statusColors = getStatusColor(payment.status);
+function PaymentCard({ payment, theme }) {
+  const THEME = theme;
+  const statusColors = getStatusColor(payment.status, THEME);
   const initials = getInitials(payment.userName);
   const methodIcon = getMethodIcon(payment.paymentMethod);
 
@@ -133,8 +129,8 @@ function PaymentCard({ payment }) {
   return (
     <View style={styles.paymentCard}>
       {/* Avatar */}
-      <View style={styles.avatarBubble}>
-        <Text style={styles.avatarInitials}>{initials}</Text>
+      <View style={[styles.avatarBubble, { backgroundColor: THEME.surface }]}>
+        <Text style={[styles.avatarInitials, { color: THEME.accentStrong }]}>{initials}</Text>
       </View>
 
       {/* Middle info */}
@@ -183,6 +179,7 @@ export default function PaymentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("All");
   const [searchText, setSearchText] = useState("");
+  const [theme, setTheme] = useState(THEMES.gold);
 
   const FILTERS = ["All", "Success", "Pending", "Manual"];
 
@@ -196,6 +193,7 @@ export default function PaymentsScreen() {
         Alert.alert("Session Expired", "Please log in again.");
         return;
       }
+      setTheme(THEMES[session.department] || THEMES.gold);
 
       const data = await getPaymentHistory(session.token);
       setPayments(data?.payments || []);
@@ -236,8 +234,10 @@ export default function PaymentsScreen() {
     return matchesFilter && matchesSearch;
   });
 
+  const THEME = theme;
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -266,6 +266,7 @@ export default function PaymentsScreen() {
             totalCollected={summary.totalCollected}
             totalTransactions={summary.totalTransactions}
             pendingCount={summary.pendingCount}
+            theme={THEME}
           />
         )}
 
@@ -299,13 +300,14 @@ export default function PaymentsScreen() {
               label={f}
               active={filter === f}
               onPress={() => setFilter(f)}
+              theme={THEME}
             />
           ))}
         </ScrollView>
 
         {/* ── List Header ── */}
         <View style={styles.listHeader}>
-          <Text style={styles.listLabel}>TRANSACTIONS</Text>
+          <Text style={[styles.listLabel, { color: THEME.accentStrong }]}>TRANSACTIONS</Text>
           <Text style={styles.listCount}>{filtered.length} records</Text>
         </View>
 
@@ -321,7 +323,7 @@ export default function PaymentsScreen() {
             <MaterialCommunityIcons
               name="cash-remove"
               size={60}
-              color="#d8bc61"
+              color={THEME.accentSoft}
             />
             <Text style={styles.emptyTitle}>No Payments Found</Text>
             <Text style={styles.emptySubtitle}>
@@ -331,7 +333,7 @@ export default function PaymentsScreen() {
         ) : (
           <View style={styles.list}>
             {filtered.map((p) => (
-              <PaymentCard key={p._id?.toString() || p.txnId} payment={p} />
+              <PaymentCard key={p._id?.toString() || p.txnId} payment={p} theme={THEME} />
             ))}
           </View>
         )}
@@ -507,8 +509,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
-    fontWeight: "700",
-    color: THEME.muted
+    fontWeight: "700"
   },
   chipTextActive: {
     color: "#d8bc61"
@@ -529,7 +530,6 @@ const styles = StyleSheet.create({
   },
   listCount: {
     fontSize: 13,
-    color: THEME.muted,
     fontWeight: "600"
   },
 
@@ -594,7 +594,6 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: THEME.muted,
     fontWeight: "500"
   },
   dot: {
@@ -638,7 +637,6 @@ const styles = StyleSheet.create({
   },
   emptySubtitle: {
     fontSize: 14,
-    color: THEME.muted,
     textAlign: "center",
     fontWeight: "500"
   },

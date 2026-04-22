@@ -13,20 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getUserDetails, deleteMember } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
-
-const THEME = {
-  page: "#f8f3e9",
-  card: "#ffffff",
-  surface: "#f4ede2",
-  accentStrong: "#b18a0b",
-  accentSoft: "#d8bc61",
-  muted: "#6c6257",
-  success: "#2d8a39",
-  successBg: "#e8f5e9",
-  pending: "#f57c00",
-  pendingBg: "#fff3e0",
-  danger: "#c11d1d"
-};
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -44,7 +32,8 @@ const formatDate = (date) => {
 };
 
 // Month pill component - shows M1, M2 etc with paid/unpaid status
-const MonthPill = ({ monthNumber, payment, onPress }) => {
+const MonthPill = ({ monthNumber, payment, onPress, theme }) => {
+  const THEME = theme;
   const paid = !!payment;
   return (
     <TouchableOpacity
@@ -58,33 +47,34 @@ const MonthPill = ({ monthNumber, payment, onPress }) => {
         color={paid ? THEME.success : "#bbb"}
         style={{ marginBottom: 2 }}
       />
-      <Text style={[styles.monthPillLabel, paid ? styles.monthPillLabelPaid : styles.monthPillLabelPending]}>
+      <Text style={[styles.monthPillLabel, { color: paid ? THEME.success : "#bbb" }]}>
         M{monthNumber}
       </Text>
       {paid && (
-        <Text style={styles.monthPillDate}>{formatDate(payment.paidAt)}</Text>
+        <Text style={[styles.monthPillDate, { color: THEME.success }]}>{formatDate(payment.paidAt)}</Text>
       )}
     </TouchableOpacity>
   );
 };
 
 // Payment detail popup card
-const PaymentDetailCard = ({ payment, onClose }) => {
+const PaymentDetailCard = ({ payment, onClose, theme }) => {
+  const THEME = theme;
   if (!payment) return null;
   return (
     <View style={styles.paymentDetailOverlay}>
       <View style={styles.paymentDetailCard}>
         <View style={styles.paymentDetailHeader}>
-          <View style={styles.paymentDetailBadge}>
+          <View style={[styles.paymentDetailBadge, { backgroundColor: THEME.successBg }]}>
             <MaterialCommunityIcons name="check-circle" size={20} color={THEME.success} />
-            <Text style={styles.paymentDetailBadgeText}>PAID</Text>
+            <Text style={[styles.paymentDetailBadgeText, { color: THEME.success }]}>PAID</Text>
           </View>
           <TouchableOpacity onPress={onClose}>
             <MaterialCommunityIcons name="close" size={20} color={THEME.muted} />
           </TouchableOpacity>
         </View>
         <Text style={styles.paymentDetailAmount}>{formatCurrency(payment.amount)}</Text>
-        <Text style={styles.paymentDetailMonth}>Month {payment.monthNumber}</Text>
+        <Text style={[styles.paymentDetailMonth, { color: THEME.muted }]}>Month {payment.monthNumber}</Text>
         <View style={styles.paymentDetailRow}>
           <MaterialCommunityIcons name="calendar" size={14} color={THEME.muted} />
           <Text style={styles.paymentDetailMeta}>{new Date(payment.paidAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</Text>
@@ -116,6 +106,7 @@ export default function UserDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
+  const [theme, setTheme] = useState(THEMES.gold);
 
   const loadData = async (isRefreshing = false) => {
     try {
@@ -123,6 +114,7 @@ export default function UserDetailScreen({ route, navigation }) {
       else setLoading(true);
 
       const session = await getPersistedSession();
+      setTheme(THEMES[session.department] || THEMES.gold);
       const details = await getUserDetails(session.token, userId);
       setData(details);
     } catch (error) {
@@ -173,9 +165,10 @@ export default function UserDetailScreen({ route, navigation }) {
   }
 
   const { profile, stats, chits } = data || {};
+  const THEME = theme;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -195,14 +188,14 @@ export default function UserDetailScreen({ route, navigation }) {
         </View>
 
         {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarInitials}>
+        <View style={[styles.profileCard, { backgroundColor: THEME.card }]}>
+          <View style={[styles.avatarLarge, { backgroundColor: THEME.surface }]}>
+            <Text style={[styles.avatarInitials, { color: THEME.accentStrong }]}>
               {profile?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
             </Text>
           </View>
           <Text style={styles.profileName}>{profile?.name}</Text>
-          <Text style={styles.profileId}>ID: #{profile?.displayId}</Text>
+          <Text style={[styles.profileId, { color: THEME.muted }]}>ID: #{profile?.displayId}</Text>
           <View style={styles.contactRow}>
             <MaterialCommunityIcons name="phone" size={16} color={THEME.muted} />
             <Text style={styles.contactText}>{profile?.mobile || "—"}</Text>
@@ -215,27 +208,27 @@ export default function UserDetailScreen({ route, navigation }) {
 
         {/* Summary Stats */}
         <View style={styles.statsRow}>
-          <View style={styles.statBox}>
+          <View style={[styles.statBox, { backgroundColor: THEME.card }]}>
             <MaterialCommunityIcons name="currency-inr" size={20} color={THEME.success} style={{ marginBottom: 4 }} />
             <Text style={styles.statLabel}>TOTAL PAID</Text>
             <Text style={[styles.statValue, { color: THEME.success }]}>
               {formatCurrency(stats?.totalPaid)}
             </Text>
           </View>
-          <View style={styles.statBox}>
+          <View style={[styles.statBox, { backgroundColor: THEME.card }]}>
             <MaterialCommunityIcons name="file-document-multiple" size={20} color={THEME.accentStrong} style={{ marginBottom: 4 }} />
-            <Text style={styles.statLabel}>ACTIVE CHITS</Text>
+            <Text style={[styles.statLabel, { color: THEME.muted }]}>ACTIVE CHITS</Text>
             <Text style={styles.statValue}>{stats?.activeChits || 0}</Text>
           </View>
-          <View style={styles.statBox}>
-            <MaterialCommunityIcons name="check-all" size={20} color="#5c6bc0" style={{ marginBottom: 4 }} />
-            <Text style={styles.statLabel}>PAYMENTS</Text>
-            <Text style={[styles.statValue, { color: "#5c6bc0" }]}>{stats?.totalPayments || 0}</Text>
+          <View style={[styles.statBox, { backgroundColor: THEME.card }]}>
+            <MaterialCommunityIcons name="check-all" size={20} color={THEME.isSilver ? "#1976d2" : "#5c6bc0"} style={{ marginBottom: 4 }} />
+            <Text style={[styles.statLabel, { color: THEME.muted }]}>PAYMENTS</Text>
+            <Text style={[styles.statValue, { color: THEME.isSilver ? "#1976d2" : "#5c6bc0" }]}>{stats?.totalPayments || 0}</Text>
           </View>
         </View>
 
         {/* Chits with per-month payment timeline */}
-        <Text style={styles.sectionTitle}>CHIT PAYMENT DETAILS</Text>
+        <Text style={[styles.sectionTitle, { color: THEME.accentStrong }]}>CHIT PAYMENT DETAILS</Text>
 
         {chits?.length > 0 ? chits.map((chit) => {
           const duration = chit.duration || 12;
@@ -248,12 +241,12 @@ export default function UserDetailScreen({ route, navigation }) {
           const progressPct = Math.round((chit.paidMonths || 0) / duration * 100);
 
           return (
-            <View key={chit.id?.toString()} style={styles.chitCard}>
+            <View key={chit.id?.toString()} style={[styles.chitCard, { backgroundColor: THEME.card }]}>
               {/* Chit Header */}
               <View style={styles.chitHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.chitPlanName}>{chit.planName}</Text>
-                  <Text style={styles.chitMeta}>
+                  <Text style={[styles.chitMeta, { color: THEME.muted }]}>
                     {chit.metalType} • {formatCurrency(chit.monthlyAmount)}/mo • {duration} months
                   </Text>
                 </View>
@@ -275,13 +268,13 @@ export default function UserDetailScreen({ route, navigation }) {
                 <View style={styles.progressBarBg}>
                   <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
                 </View>
-                <Text style={styles.progressText}>
+                <Text style={[styles.progressText, { color: THEME.muted }]}>
                   {chit.paidMonths || 0}/{duration} months paid • {formatCurrency(chit.totalPaid)} of {formatCurrency(chit.totalAmount || chit.monthlyAmount * duration)}
                 </Text>
               </View>
 
               {/* Monthly Pills Grid */}
-              <Text style={styles.timelineLabel}>MONTHLY PAYMENT TRACKER</Text>
+              <Text style={[styles.timelineLabel, { color: THEME.muted }]}>MONTHLY PAYMENT TRACKER</Text>
               <View style={styles.monthGrid}>
                 {Array.from({ length: duration }, (_, i) => i + 1).map(month => (
                   <MonthPill
@@ -289,6 +282,7 @@ export default function UserDetailScreen({ route, navigation }) {
                     monthNumber={month}
                     payment={paymentMap[month] || null}
                     onPress={(payment) => setSelectedPayment(payment)}
+                    theme={THEME}
                   />
                 ))}
               </View>
@@ -305,17 +299,17 @@ export default function UserDetailScreen({ route, navigation }) {
 
               {/* No payments yet */}
               {(!chit.payments || chit.payments.length === 0) && (
-                <View style={styles.noPaymentsBanner}>
+                <View style={[styles.noPaymentsBanner, { backgroundColor: THEME.pendingBg }]}>
                   <MaterialCommunityIcons name="clock-outline" size={16} color={THEME.pending} />
-                  <Text style={styles.noPaymentsText}>No payments recorded yet</Text>
+                  <Text style={[styles.noPaymentsText, { color: THEME.pending }]}>No payments recorded yet</Text>
                 </View>
               )}
             </View>
           );
         }) : (
-          <View style={styles.emptyCard}>
-            <MaterialCommunityIcons name="file-document-outline" size={40} color="#ddd" />
-            <Text style={styles.emptyText}>No chit enrollments found</Text>
+          <View style={[styles.emptyCard, { backgroundColor: THEME.card }]}>
+            <MaterialCommunityIcons name="file-document-outline" size={40} color={THEME.accentSoft} />
+            <Text style={[styles.emptyText, { color: THEME.muted }]}>No chit enrollments found</Text>
           </View>
         )}
 
@@ -327,6 +321,7 @@ export default function UserDetailScreen({ route, navigation }) {
         <PaymentDetailCard
           payment={selectedPayment}
           onClose={() => setSelectedPayment(null)}
+          theme={THEME}
         />
       )}
     </SafeAreaView>
@@ -334,8 +329,8 @@ export default function UserDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: THEME.page },
-  loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: THEME.page },
+  safe: { flex: 1 },
+  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
   content: { paddingHorizontal: 20, paddingTop: 10 },
 
   // Header
@@ -345,15 +340,15 @@ const styles = StyleSheet.create({
 
   // Profile Card
   profileCard: {
-    backgroundColor: THEME.card, borderRadius: 24, padding: 24,
+    borderRadius: 24, padding: 24,
     alignItems: "center", marginBottom: 16, elevation: 2,
     shadowColor: "#000", shadowOpacity: 0.05, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10
   },
   avatarLarge: {
-    width: 80, height: 80, borderRadius: 40, backgroundColor: THEME.surface,
+    width: 80, height: 80, borderRadius: 40,
     justifyContent: "center", alignItems: "center", marginBottom: 14
   },
-  avatarInitials: { fontSize: 28, fontWeight: "800", color: THEME.accentStrong },
+  avatarInitials: { fontSize: 28, fontWeight: "800" },
   profileName: { fontSize: 22, fontWeight: "800", color: "#1c1610" },
   profileId: { fontSize: 13, color: THEME.muted, fontWeight: "600", marginBottom: 12 },
   contactRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
@@ -362,28 +357,28 @@ const styles = StyleSheet.create({
   // Stats Row
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
   statBox: {
-    flex: 1, backgroundColor: THEME.card, borderRadius: 18, padding: 14,
+    flex: 1, borderRadius: 18, padding: 14,
     alignItems: "center", elevation: 1,
     shadowColor: "#000", shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6
   },
-  statLabel: { fontSize: 9, fontWeight: "800", color: THEME.muted, letterSpacing: 1, marginBottom: 4 },
+  statLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1, marginBottom: 4 },
   statValue: { fontSize: 16, fontWeight: "800", color: "#1c1610" },
 
   // Section
   sectionTitle: {
-    fontSize: 13, fontWeight: "900", color: THEME.accentStrong,
+    fontSize: 13, fontWeight: "900",
     letterSpacing: 1.5, marginBottom: 14
   },
 
   // Chit Card
   chitCard: {
-    backgroundColor: THEME.card, borderRadius: 24, padding: 20,
+    borderRadius: 24, padding: 20,
     marginBottom: 16, elevation: 2,
     shadowColor: "#000", shadowOpacity: 0.06, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12
   },
   chitHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14 },
   chitPlanName: { fontSize: 17, fontWeight: "800", color: "#1c1610", marginBottom: 4 },
-  chitMeta: { fontSize: 13, color: THEME.muted, fontWeight: "500" },
+  chitMeta: { fontSize: 13, fontWeight: "500" },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   statusText: { fontSize: 10, fontWeight: "800" },
 
@@ -393,13 +388,13 @@ const styles = StyleSheet.create({
     height: 6, backgroundColor: "#f0ebe0", borderRadius: 3, marginBottom: 6, overflow: "hidden"
   },
   progressBarFill: {
-    height: "100%", backgroundColor: THEME.success, borderRadius: 3
+    height: "100%", borderRadius: 3
   },
-  progressText: { fontSize: 12, color: THEME.muted, fontWeight: "600" },
+  progressText: { fontSize: 12, fontWeight: "600" },
 
   // Month grid
   timelineLabel: {
-    fontSize: 10, fontWeight: "800", color: THEME.muted,
+    fontSize: 10, fontWeight: "800",
     letterSpacing: 1.5, marginBottom: 10
   },
   monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
@@ -417,27 +412,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7f7f7", borderColor: "#e0e0e0"
   },
   monthPillLabel: { fontSize: 11, fontWeight: "800" },
-  monthPillLabelPaid: { color: THEME.success },
+  monthPillLabelPaid: { },
   monthPillLabelPending: { color: "#ccc" },
-  monthPillDate: { fontSize: 8, color: THEME.success, fontWeight: "600", marginTop: 1 },
+  monthPillDate: { fontSize: 8, fontWeight: "600", marginTop: 1 },
 
   // Info row
   paidSummary: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  paidSummaryText: { fontSize: 11, color: THEME.muted, fontStyle: "italic" },
+  paidSummaryText: { fontSize: 11, fontStyle: "italic" },
 
   // No payments banner
   noPaymentsBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: THEME.pendingBg, borderRadius: 10, padding: 12, marginTop: 4
   },
-  noPaymentsText: { fontSize: 13, color: THEME.pending, fontWeight: "600" },
+  noPaymentsText: { fontSize: 13, fontWeight: "600" },
 
   // Empty state
   emptyCard: {
-    backgroundColor: THEME.card, borderRadius: 20, padding: 40,
+    borderRadius: 20, padding: 40,
     alignItems: "center", marginBottom: 20
   },
-  emptyText: { marginTop: 12, color: THEME.muted, fontSize: 15, fontStyle: "italic" },
+  emptyText: { marginTop: 12, fontSize: 15, fontStyle: "italic" },
 
   // Payment detail overlay (popup)
   paymentDetailOverlay: {
@@ -455,11 +450,11 @@ const styles = StyleSheet.create({
   },
   paymentDetailBadge: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: THEME.successBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20
   },
-  paymentDetailBadgeText: { fontSize: 12, fontWeight: "800", color: THEME.success },
+  paymentDetailBadgeText: { fontSize: 12, fontWeight: "800" },
   paymentDetailAmount: { fontSize: 32, fontWeight: "900", color: "#1c1610", marginBottom: 4 },
-  paymentDetailMonth: { fontSize: 14, color: THEME.muted, fontWeight: "600", marginBottom: 16 },
+  paymentDetailMonth: { fontSize: 14, fontWeight: "600", marginBottom: 16 },
   paymentDetailRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   paymentDetailMeta: { fontSize: 14, color: "#444", fontWeight: "500", flex: 1 }
 });

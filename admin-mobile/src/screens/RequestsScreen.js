@@ -14,17 +14,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import BottomTab from "../components/dashboard/BottomTab";
 import { getPendingRequests, updateRequestStatus } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
-
-const THEME = {
-  page: "#f9f6e9",
-  card: "#ffffff",
-  accentStrong: "#b18a0b",
-  accentSoft: "#f0d87a",
-  muted: "#6c6257",
-  inputBg: "#f2ede2",
-  insightBg: "#f4eccd",
-  queueBg: "#f3f0e8"
-};
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
 function getInitials(name) {
   if (!name) return "?";
@@ -47,7 +38,8 @@ function formatDate(dateStr) {
   });
 }
 
-function RequestCard({ request, onApprove, onReject, isProcessing }) {
+function RequestCard({ request, onApprove, onReject, isProcessing, theme }) {
+  const THEME = theme;
   const metal = (request.metalType || "gold").toLowerCase();
   const metalIcon = metal === "gold" ? "gold" : "silver";
   const metalColor = metal === "gold" ? "#b18a0b" : "#73808b";
@@ -63,9 +55,9 @@ function RequestCard({ request, onApprove, onReject, isProcessing }) {
             #{(request.txnId || "").slice(-8).toUpperCase() || "—"}
           </Text>
         </View>
-        <View style={styles.pendingBadge}>
-          <View style={styles.pendingDot} />
-          <Text style={styles.pendingText}>
+        <View style={[styles.pendingBadge, { backgroundColor: THEME.isSilver ? "#eef0f3" : "#fbe49d" }]}>
+          <View style={[styles.pendingDot, { backgroundColor: THEME.accentStrong }]} />
+          <Text style={[styles.pendingText, { color: THEME.accentStrong }]}>
             {(request.status || "PENDING").toUpperCase()}
           </Text>
         </View>
@@ -73,8 +65,8 @@ function RequestCard({ request, onApprove, onReject, isProcessing }) {
 
       {/* User Info Row */}
       <View style={styles.userInfoRow}>
-        <View style={styles.avatarBubble}>
-          <Text style={styles.avatarInitials}>
+        <View style={[styles.avatarBubble, { backgroundColor: THEME.surface }]}>
+          <Text style={[styles.avatarInitials, { color: THEME.accentStrong }]}>
             {getInitials(request.userName)}
           </Text>
         </View>
@@ -152,7 +144,7 @@ function RequestCard({ request, onApprove, onReject, isProcessing }) {
       {/* Action Buttons */}
       <View style={styles.actionRow}>
         <TouchableOpacity
-          style={[styles.approveBtn, isProcessing && { opacity: 0.5 }]}
+          style={[styles.approveBtn, { backgroundColor: THEME.accentStrong }, isProcessing && { opacity: 0.5 }]}
           activeOpacity={0.8}
           onPress={() => onApprove(request._id)}
           disabled={isProcessing}
@@ -161,7 +153,7 @@ function RequestCard({ request, onApprove, onReject, isProcessing }) {
           <Text style={styles.approveBtnText}>APPROVE</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.rejectBtn, isProcessing && { opacity: 0.5 }]}
+          style={[styles.rejectBtn, { borderColor: THEME.isSilver ? "#d1d8df" : "#e0d5c1" }, isProcessing && { opacity: 0.5 }]}
           activeOpacity={0.6}
           onPress={() => onReject(request._id)}
           disabled={isProcessing}
@@ -179,6 +171,8 @@ export default function RequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState(null);
+  const [theme, setTheme] = useState(THEMES.gold);
+  const [department, setDepartment] = useState("gold");
 
   const fetchRequests = useCallback(async (isRefreshing = false) => {
     try {
@@ -190,6 +184,8 @@ export default function RequestsScreen() {
         Alert.alert("Authentication Required", "Please log in.");
         return;
       }
+      setTheme(THEMES[session.department] || THEMES.gold);
+      setDepartment(session.department || "gold");
 
       const data = await getPendingRequests(session.token);
       setRequests(data || []);
@@ -238,9 +234,10 @@ export default function RequestsScreen() {
   };
 
   const pendingCount = requests.length;
+  const THEME = theme;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -270,9 +267,9 @@ export default function RequestsScreen() {
 
         {/* Hero */}
         <View style={styles.heroSection}>
-          <View style={styles.oversightBadge}>
-            <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>GOLD OVERSIGHT</Text>
+          <View style={[styles.oversightBadge, { backgroundColor: THEME.surface }]}>
+            <View style={[styles.badgeDot, { backgroundColor: THEME.accentStrong }]} />
+            <Text style={[styles.badgeText, { color: THEME.accentStrong }]}>{department.toUpperCase()} OVERSIGHT</Text>
           </View>
           <Text style={styles.heroTitle}>Pending{"\n"}Verifications</Text>
           <Text style={styles.heroSubtitle}>
@@ -284,12 +281,12 @@ export default function RequestsScreen() {
         {!loading && (
           <View style={styles.summaryStrip}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>{pendingCount}</Text>
+              <Text style={[styles.summaryValue, { color: THEME.accentStrong }]}>{pendingCount}</Text>
               <Text style={styles.summaryLabel}>Pending</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>
+              <Text style={[styles.summaryValue, { color: THEME.accentStrong }]}>
                 ₹{requests
                   .reduce((s, r) => s + (r.monthlyAmount || 0), 0)
                   .toLocaleString("en-IN")}
@@ -315,6 +312,7 @@ export default function RequestsScreen() {
                 isProcessing={processingId === req._id}
                 onApprove={(id) => handleAction(id, "approved")}
                 onReject={(id) => handleAction(id, "rejected")}
+                theme={THEME}
               />
             ))
           ) : (
@@ -322,9 +320,9 @@ export default function RequestsScreen() {
               <MaterialCommunityIcons
                 name="check-circle-outline"
                 size={64}
-                color="#d8c99a"
+                color={THEME.accentSoft}
               />
-              <Text style={styles.emptyTitle}>All Clear</Text>
+              <Text style={[styles.emptyTitle, { color: THEME.accentStrong }]}>All Clear</Text>
               <Text style={styles.emptyText}>
                 No chit requests are pending review right now.
               </Text>
@@ -333,11 +331,11 @@ export default function RequestsScreen() {
         </View>
 
         {/* Audit Info Card */}
-        <View style={styles.insightCard}>
+        <View style={[styles.insightCard, { backgroundColor: THEME.insightBg }]}>
           <MaterialCommunityIcons
             name="shield-check"
             size={26}
-            color="#856a00"
+            color={THEME.accentStrong}
             style={{ marginBottom: 12 }}
           />
           <Text style={styles.insightTitle}>Audit Integrity</Text>
@@ -345,8 +343,8 @@ export default function RequestsScreen() {
             All approvals are logged with your admin credentials. Rejected
             requests are archived and auditable.
           </Text>
-          <View style={styles.insightFooter}>
-            <Text style={styles.insightLabel}>SYSTEM STATUS</Text>
+          <View style={[styles.insightFooter, { borderTopColor: THEME.isSilver ? "rgba(0,0,0,0.08)" : "rgba(133,106,0,0.12)" }]}>
+            <Text style={[styles.insightLabel, { color: THEME.accentStrong }]}>SYSTEM STATUS</Text>
             <Text style={styles.insightValue}>Active</Text>
           </View>
         </View>
@@ -363,8 +361,7 @@ export default function RequestsScreen() {
 
 const styles = StyleSheet.create({
   safe: {
-    flex: 1,
-    backgroundColor: THEME.page
+    flex: 1
   },
   content: {
     paddingHorizontal: 22,
@@ -423,7 +420,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffdf8e",
     borderRadius: 25,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -439,7 +435,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#856a00",
     letterSpacing: 1
   },
   heroTitle: {
@@ -475,8 +470,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 28,
-    fontWeight: "800",
-    color: "#b18a0b"
+    fontWeight: "800"
   },
   summaryLabel: {
     fontSize: 12,
@@ -649,10 +643,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#b18a0b",
+    backgroundColor: THEME.accentStrong,
     borderRadius: 25,
     paddingVertical: 15,
-    shadowColor: "#b18a0b",
+    shadowColor: THEME.accentStrong,
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
@@ -689,8 +683,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: "#b18a0b"
+    fontWeight: "800"
   },
   emptyText: {
     fontSize: 15,

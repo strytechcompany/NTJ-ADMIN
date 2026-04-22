@@ -14,17 +14,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import BottomTab from "../components/dashboard/BottomTab";
 import { getActiveChits } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
-
-const THEME = {
-  page: "#f9f6e9",
-  card: "#ffffff",
-  accentStrong: "#b18a0b",
-  accentSoft: "#f0d87a",
-  muted: "#6c6257",
-  inputBg: "#f2ede2",
-  insightBg: "#f4eccd",
-  queueBg: "#f3f0e8"
-};
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
 
 function getInitials(name) {
   if (!name) return "?";
@@ -71,10 +62,9 @@ function ActiveChitCard({ request }) {
         </View>
       </View>
 
-      {/* User Info Row */}
       <View style={styles.userInfoRow}>
-        <View style={styles.avatarBubble}>
-          <Text style={styles.avatarInitials}>
+        <View style={[styles.avatarBubble, { backgroundColor: THEME.surface }]}>
+          <Text style={[styles.avatarInitials, { color: THEME.accentStrong }]}>
             {getInitials(request.userName)}
           </Text>
         </View>
@@ -143,6 +133,7 @@ export default function ActiveChitsScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [theme, setTheme] = useState(THEMES.gold);
 
   const fetchRequests = useCallback(async (isRefreshing = false) => {
     try {
@@ -154,6 +145,7 @@ export default function ActiveChitsScreen({ navigation }) {
         Alert.alert("Authentication Required", "Please log in.");
         return;
       }
+      setTheme(THEMES[session.department] || THEMES.gold);
 
       const data = await getActiveChits(session.token);
       setRequests(data || []);
@@ -170,9 +162,10 @@ export default function ActiveChitsScreen({ navigation }) {
   }, [fetchRequests]);
 
   const activeCount = requests.length;
+  const THEME = theme;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -212,12 +205,12 @@ export default function ActiveChitsScreen({ navigation }) {
         {!loading && (
           <View style={styles.summaryStrip}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>{activeCount}</Text>
+              <Text style={[styles.summaryValue, { color: THEME.accentStrong }]}>{activeCount}</Text>
               <Text style={styles.summaryLabel}>Active Plans</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>
+              <Text style={[styles.summaryValue, { color: THEME.accentStrong }]}>
                 ₹{requests
                   .reduce((s, r) => s + (r.monthlyAmount || 0), 0)
                   .toLocaleString("en-IN")}
@@ -247,9 +240,9 @@ export default function ActiveChitsScreen({ navigation }) {
               <MaterialCommunityIcons
                 name="notebook-outline"
                 size={64}
-                color="#d8c99a"
+                color={THEME.accentSoft}
               />
-              <Text style={styles.emptyTitle}>No Active Plans</Text>
+              <Text style={[styles.emptyTitle, { color: THEME.accentStrong }]}>No Active Plans</Text>
               <Text style={styles.emptyText}>
                 There are currently no active chit plans.
               </Text>
@@ -269,8 +262,7 @@ export default function ActiveChitsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: {
-    flex: 1,
-    backgroundColor: THEME.page
+    flex: 1
   },
   content: {
     paddingHorizontal: 22,
@@ -352,8 +344,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 28,
-    fontWeight: "800",
-    color: "#b18a0b"
+    fontWeight: "800"
   },
   summaryLabel: {
     fontSize: 12,
@@ -521,8 +512,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: "#b18a0b"
+    fontWeight: "800"
   },
   emptyText: {
     fontSize: 15,
