@@ -6,6 +6,12 @@ export const THEMES = {
     accentStrong: "#b18a0b",
     accentSoft: "#d8bc61",
     muted: "#6c6257",
+    success: "#1e7e34",
+    successBg: "#e6f4ea",
+    danger: "#c11d1d",
+    dangerBg: "#fdecea",
+    pending: "#b18a0b",
+    pendingBg: "#fff8e1",
     revenueGradient: ["#8e7200", "#b48b08", "#d6b12f"],
     marketCard: "#f3ede2",
     negative: "#c11d1d",
@@ -24,6 +30,12 @@ export const THEMES = {
     accentStrong: "#73808b",
     accentSoft: "#aeb8c1",
     muted: "#5f6870",
+    success: "#1e7e34",
+    successBg: "#e6f4ea",
+    danger: "#c11d1d",
+    dangerBg: "#fdecea",
+    pending: "#73808b",
+    pendingBg: "#eef0f3",
     revenueGradient: ["#5f6972", "#7e8a95", "#9faab5"],
     marketCard: "#e9edf2",
     negative: "#c11d1d",
@@ -36,3 +48,4 @@ export const THEMES = {
     isSilver: true
   }
 };
+

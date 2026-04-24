@@ -16,7 +16,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import BottomTab from "../components/dashboard/BottomTab";
 import { getAllUsers, getUserDetails, manualCreateUser, manualAssignChit, manualAddPayment } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
-import { THEMES } from "../utils/themes";const THEME = THEMES.gold;
+import { THEMES } from "../utils/themes";
+const THEME = THEMES.gold;
+
 
 
 const SEGMENTS = ["Create User", "Assign Chit", "Add Payment"];
@@ -31,6 +33,9 @@ export default function ChitsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [userChits, setUserChits] = useState([]);
   const [theme, setTheme] = useState(THEMES.gold);
+
+  const THEME = theme;
+
 
   const [form, setForm] = useState({
     name: "",
@@ -420,7 +425,6 @@ export default function ChitsScreen() {
     }
   };
 
-  const THEME = theme;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>

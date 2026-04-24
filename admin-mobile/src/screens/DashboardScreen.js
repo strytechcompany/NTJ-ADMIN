@@ -19,9 +19,10 @@ import RateEditorModal from "../components/dashboard/RateEditorModal";
 import { getDashboard, updateMetalRate } from "../services/api";
 import { clearSession, getPersistedSession } from "../utils/storage";
 import { THEMES } from "../utils/themes";
+import { formatNumber, formatCurrency } from "../utils/format";
 const THEME = THEMES.gold;
 
-const formatNumber = (value) => new Intl.NumberFormat("en-IN").format(Number(value || 0));
+
 
 const formatRevenue = (value) => {
   const amount = Number(value || 0);
@@ -37,12 +38,7 @@ const formatRevenue = (value) => {
   return `Rs${amount.toFixed(0)}`;
 };
 
-const formatCurrency = (value, currency = "INR") =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2
-  }).format(Number(value || 0));
+// Removed local formatCurrency as we use the utility
 
 const getNextFixingLabel = () => {
   const now = new Date();
@@ -53,7 +49,11 @@ const getNextFixingLabel = () => {
     next.setDate(next.getDate() + 1);
   }
 
-  return `Next fixing ${next.toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`;
+  try {
+    return `Next fixing ${next.toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`;
+  } catch (e) {
+    return `Next fixing ${next.toDateString()}`;
+  }
 };
 
 const FALLBACK_DATA = {
@@ -117,14 +117,18 @@ export default function DashboardScreen({ navigation, department = "gold" }) {
       return `Global ${department} pricing will appear once the live admin token is available.`;
     }
 
-    return `Global ${department} pricing current as of ${new Date(
-      dashboard.market.updatedAt
-    ).toLocaleString("en-IN", {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit"
-    })}.`;
+    try {
+      return `Global ${department} pricing current as of ${new Date(
+        dashboard.market.updatedAt
+      ).toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit"
+      })}.`;
+    } catch (e) {
+      return `Global ${department} pricing current as of ${new Date(dashboard.market.updatedAt).toDateString()}.`;
+    }
   }, [dashboard.market?.updatedAt, department]);
 
   const handleUpdateRate = async (payload) => {
@@ -163,7 +167,12 @@ export default function DashboardScreen({ navigation, department = "gold" }) {
           <RefreshControl refreshing={refreshing} onRefresh={() => loadDashboard("refresh")} />
         }
       >
-        <Header theme={theme} subtitle={subtitle} onLogout={handleLogout} />
+        <Header 
+          theme={theme} 
+          subtitle={subtitle} 
+          onLogout={handleLogout} 
+          onNotification={() => navigation.navigate("NotificationSend")}
+        />
 
         {error ? (
           <View style={[styles.errorBanner, { backgroundColor: theme.card }]}>
@@ -190,6 +199,7 @@ export default function DashboardScreen({ navigation, department = "gold" }) {
             detail="+ 4.2% this month"
             badge="USR"
             accent={theme.accentStrong}
+            onPress={() => navigation.navigate("Users")}
           />
 
           <StatCard

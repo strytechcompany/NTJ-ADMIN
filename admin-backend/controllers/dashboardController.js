@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const UPIConfig = require("../models/UPIConfig");
+const Notification = require("../models/Notification");
 
 const buildTimeAgo = (value) => {
   if (!value) {
@@ -480,7 +481,12 @@ const getPendingRequests = async (req, res) => {
         {
           $project: {
             _id: 1,
-            txnId: { $ifNull: ["$txnId", { $toString: "$_id" }] },
+            txnId: { 
+              $ifNull: [
+                "$txnId", 
+                { $ifNull: ["$paymentId", { $ifNull: ["$transactionId", { $toString: "$_id" }] }] }
+              ] 
+            },
             requestType: { $ifNull: ["$requestType", "chit"] },
             status: 1,
             metalType: 1,
@@ -634,7 +640,11 @@ const updateRequestStatus = async (req, res) => {
     let result = await db.collection("chitfunds").updateOne(
       { 
         _id: objectId,
-        metalType: department.toLowerCase()
+        $or: [
+          { metalType: department.toLowerCase() },
+          { metalType: { $exists: false } },
+          { metalType: null }
+        ]
       },
       { $set: { status: normalizedStatus, updatedAt: new Date() } }
     );
@@ -657,12 +667,58 @@ const updateRequestStatus = async (req, res) => {
             { $set: { status: finalStatus, updatedAt: new Date() } }
           );
 
-          // Update balance
-          const balanceField = order.metalType === "gold" ? "goldBalance" : "silverBalance";
-          const userRef = order.userId || order.user_id || order.user;
+          // Robust resolution of chitId and monthNumber
+          const rawChitId = order.chitId || order.chit_id || order.chit;
+          let resolvedMonth = order.monthNumber ? Number(order.monthNumber) : null;
+          const userRef = order.userId || order.user_id || order.user || order.customerId;
           const userObjectId = mongoose.isValidObjectId(userRef) ? new mongoose.Types.ObjectId(userRef) : null;
-          
+
           if (userObjectId) {
+             const chitIdObj = rawChitId && mongoose.isValidObjectId(rawChitId) ? new mongoose.Types.ObjectId(rawChitId) : null;
+             
+             // If monthNumber is missing and we have a chit, auto-calculate it
+             if (chitIdObj && !resolvedMonth) {
+                const existingCount = await db.collection("payments").countDocuments({ chitId: chitIdObj });
+                resolvedMonth = existingCount + 1;
+             }
+             
+             // Check for duplicate payment if month and chit are known
+             let shouldInsert = true;
+             if (chitIdObj && resolvedMonth) {
+                const existingPayment = await db.collection("payments").findOne({
+                    chitId: chitIdObj,
+                    monthNumber: resolvedMonth
+                });
+                if (existingPayment) shouldInsert = false;
+             }
+             
+             if (shouldInsert) {
+                 await db.collection("payments").insertOne({
+                    userId: userObjectId,
+                    chitId: chitIdObj, // May be null (unlinked)
+                    amount: Number(order.amountPaid || order.amount || 0),
+                    monthNumber: resolvedMonth, // May be null
+                    metalType: order.metalType || "gold",
+                    paymentMethod: "online",
+                    txnId: order.paymentId || order.orderId || order.transactionId || id,
+                    notes: order.notes || (chitIdObj ? "Online Payment Approved" : "General Payment (Unlinked)"),
+                    paidAt: new Date(),
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                 });
+
+                 // Update `paidMonths` inside `chitfunds` document if linked
+                 if (chitIdObj) {
+                    await db.collection("chitfunds").updateOne(
+                        { _id: chitIdObj },
+                        { $inc: { paidMonths: 1 }, $set: { updatedAt: new Date() } }
+                    );
+                 }
+             }
+          }
+
+          if (userObjectId) {
+            const balanceField = (order.metalType || "gold").toLowerCase() === "gold" ? "goldBalance" : "silverBalance";
             await db.collection("users").updateOne(
               { _id: userObjectId },
               { $inc: { [balanceField]: Number(order.amountPaid || order.amount || 0) } }
@@ -777,12 +833,27 @@ const getUserDetails = async (req, res) => {
       ]
     }).sort({ createdAt: -1 }).toArray();
 
-    // 3. Fetch monthly payments from the 'payments' collection (linked to chits)
+    // 3. Fetch monthly payments from the 'payments' collection
     const monthlyPayments = await db.collection("payments").find({
-      userId: userObjectId
+      $or: [
+        { userId: id },
+        { userId: userObjectId }
+      ]
     }).sort({ createdAt: 1 }).toArray();
 
-    // 4. Group monthly payments by chitId
+    // 4. Fetch full transaction history from orders collection
+    const transactions = await db.collection("orders").find({
+      $or: [
+        { userId: id },
+        { userId: userObjectId },
+        { user_id: id },
+        { user_id: userObjectId }
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+
+    // 5. Calculate overall total paid across all payments
+    const totalPaidAmount = monthlyPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
     const paymentsByChit = {};
     monthlyPayments.forEach(p => {
       const chitKey = p.chitId ? p.chitId.toString() : "unlinked";
@@ -790,16 +861,40 @@ const getUserDetails = async (req, res) => {
       paymentsByChit[chitKey].push(p);
     });
 
-    // 5. Total paid across all chits
-    const totalPaid = monthlyPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    // AUTO-RECOVERY: If user has exactly one chit, and has unlinked payments, link them automatically.
+    if (chits.length === 1 && paymentsByChit["unlinked"]?.length > 0) {
+      const targetChit = chits[0];
+      const targetChitId = targetChit._id;
+      const unlinked = paymentsByChit["unlinked"];
+      
+      // Move them to the target chit in memory for this response
+      if (!paymentsByChit[targetChitId.toString()]) paymentsByChit[targetChitId.toString()] = [];
+      
+      for (let i = 0; i < unlinked.length; i++) {
+        const p = unlinked[i];
+        // Calculate a safe month number based on current count
+        const monthNum = (targetChit.paidMonths || 0) + i + 1;
+        
+        // Update in memory for current view
+        p.chitId = targetChitId;
+        p.monthNumber = monthNum;
+        paymentsByChit[targetChitId.toString()].push(p);
 
-    // 6. Build formatted chits with per-month payment info
+        // TRIGGER ASYNC REPAIR (Fire and forget DB update to fix data permanently)
+        db.collection("payments").updateOne({ _id: p._id }, { $set: { chitId: targetChitId, monthNumber: monthNum } });
+        db.collection("chitfunds").updateOne({ _id: targetChitId }, { $inc: { paidMonths: 1 } });
+      }
+      
+      // Clear unlinked list as they are now "linked"
+      delete paymentsByChit["unlinked"];
+    }
+
     const formattedChits = chits.map(c => {
       const chitId = c._id.toString();
       const chitPayments = (paymentsByChit[chitId] || []).sort((a, b) => a.monthNumber - b.monthNumber);
       const duration = c.duration || 12;
       const totalPaidForChit = chitPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
+      
       return {
         id: c._id,
         planName: c.planName || "Standard Plan",
@@ -838,10 +933,28 @@ const getUserDetails = async (req, res) => {
       stats: {
         totalChits: chits.length,
         activeChits: chits.filter(c => ["approved", "active"].includes((c.status || "").toLowerCase())).length,
-        totalPaid: totalPaid,
-        totalPayments: monthlyPayments.length
+        totalPaid: totalPaidAmount,
+        totalPayments: monthlyPayments.length,
+        totalTransactions: transactions.length
       },
-      chits: formattedChits
+      chits: formattedChits,
+      unlinkedPayments: (paymentsByChit["unlinked"] || []).map(p => ({
+        id: p._id,
+        amount: p.amount,
+        paidAt: p.paidAt || p.createdAt,
+        txnId: p.txnId,
+        paymentMethod: p.paymentMethod || "manual",
+        notes: p.notes || null,
+        metalType: (p.metalType || "gold").toUpperCase()
+      })),
+      transactions: transactions.map(t => ({
+        id: t._id,
+        amount: t.amountPaid || t.amount || 0,
+        status: (t.status || "PENDING").toUpperCase(),
+        txnId: t.transactionId || t.orderId || t.txnId,
+        date: t.createdAt || t.updatedAt,
+        metalType: (t.metalType || "GOLD").toUpperCase()
+      }))
     };
 
     return res.status(200).json(details);
@@ -1053,14 +1166,84 @@ const manualAddPayment = async (req, res) => {
       { $inc: { [balanceField]: Number(amount) } }
     );
 
+    // CRITICAL: Update paidMonths inside chitfunds document if chitId is provided
+    if (resolvedChitId) {
+      await db.collection("chitfunds").updateOne(
+        { _id: resolvedChitId },
+        { 
+          $inc: { paidMonths: 1 }, 
+          $set: { updatedAt: new Date() } 
+        }
+      );
+    }
+
     return res.status(201).json({
       message: `Month ${month} payment recorded successfully`,
       paymentId: result.insertedId,
-      payment: newPayment
+      txnId: autoTxnId,
+      month: month
     });
   } catch (error) {
-    console.error("[manualAddPayment] Error:", error);
-    return res.status(500).json({ message: "Unable to record payment", error: error.message });
+    console.error("manualAddPayment error:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+const linkPaymentToChit = async (req, res) => {
+  try {
+    const { paymentId, chitId, monthNumber } = req.body;
+    const db = mongoose.connection.db;
+
+    if (!paymentId || !chitId) {
+      return res.status(400).json({ message: "Payment ID and Chit ID are required" });
+    }
+
+    const paymentObjectId = new mongoose.Types.ObjectId(paymentId);
+    const chitObjectId = new mongoose.Types.ObjectId(chitId);
+
+    // 1. Get payment details
+    const payment = await db.collection("payments").findOne({ _id: paymentObjectId });
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+
+    // 2. Get chit details to verify existence and check for existing month payment
+    const chit = await db.collection("chitfunds").findOne({ _id: chitObjectId });
+    if (!chit) return res.status(404).json({ message: "Chit not found" });
+
+    // 3. Resolve month number
+    let month = monthNumber ? Number(monthNumber) : null;
+    if (!month) {
+      const existingCount = await db.collection("payments").countDocuments({ chitId: chitObjectId });
+      month = existingCount + 1;
+    }
+
+    // 4. Update payment
+    await db.collection("payments").updateOne(
+      { _id: paymentObjectId },
+      { 
+        $set: { 
+          chitId: chitObjectId, 
+          monthNumber: month,
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    // 5. Update chit's paidMonths
+    await db.collection("chitfunds").updateOne(
+      { _id: chitObjectId },
+      { 
+        $inc: { paidMonths: 1 },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    return res.status(200).json({ 
+      message: "Payment successfully linked to chit plan",
+      month: month
+    });
+  } catch (error) {
+    console.error("linkPaymentToChit error:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -1202,7 +1385,7 @@ const getPaymentHistory = async (req, res) => {
             txnId: {
               $ifNull: [
                 "$txnId",
-                { $ifNull: ["$transactionId", { $ifNull: ["$razorpay_payment_id", { $toString: "$_id" }] }] }
+                { $ifNull: ["$transactionId", { $ifNull: ["$paymentId", { $ifNull: ["$razorpay_payment_id", { $toString: "$_id" }] }] }] }
               ]
             },
             userName: { $ifNull: ["$resolvedUser.name", "Unknown Member"] },
@@ -1450,6 +1633,61 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const sendNotification = async (req, res) => {
+  try {
+    const { title, message, type, target, userId } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ message: "Message content is required" });
+    }
+
+    const notification = new Notification({
+      title: title || "Admin Message",
+      message,
+      type: type || "general",
+      target: target || "all",
+      userId: target === "individual" && mongoose.isValidObjectId(userId) ? new mongoose.Types.ObjectId(userId) : null
+    });
+
+    await notification.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Notification sent successfully",
+      data: notification
+    });
+  } catch (error) {
+    console.error("sendNotification error:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+const getNotifications = async (req, res) => {
+  try {
+    const { userId } = req.query;
+    let query = { target: 'all' };
+
+    if (userId && mongoose.isValidObjectId(userId)) {
+      query = {
+        $or: [
+          { target: 'all' },
+          { userId: new mongoose.Types.ObjectId(userId) }
+        ]
+      };
+    }
+
+    const notifications = await Notification.find(query).sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: notifications
+    });
+  } catch (error) {
+    console.error("getNotifications error:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
 module.exports = {
   getDashboard,
   getPendingRequests,
@@ -1461,6 +1699,7 @@ module.exports = {
   manualCreateUser,
   manualAssignChit,
   manualAddPayment,
+  linkPaymentToChit,
   getPaymentHistory,
   getUPIs,
   addUPI,
@@ -1468,5 +1707,7 @@ module.exports = {
   deleteUPI,
   getActiveUPIPublic,
   debugOrders,
-  deleteUser
+  deleteUser,
+  sendNotification,
+  getNotifications
 };

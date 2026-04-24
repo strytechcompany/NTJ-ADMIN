@@ -1,13 +1,10 @@
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
+import { formatCurrency } from "../../utils/format";
+
 export default function MarketCard({ theme, rate, currency, metalType, onEdit }) {
-  const formatCurrency = (value) =>
-    new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: currency || "INR",
-      maximumFractionDigits: 2
-    }).format(Number(value || 0));
+
 
   return (
     <View style={[styles.card, { backgroundColor: theme.marketCard }]}>

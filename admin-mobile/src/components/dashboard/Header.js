@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-export default function Header({ theme, subtitle, onLogout }) {
+export default function Header({ theme, subtitle, onLogout, onNotification }) {
   return (
     <View style={styles.container}>
       <View style={styles.profileRow}>
@@ -14,9 +14,15 @@ export default function Header({ theme, subtitle, onLogout }) {
         </View>
       </View>
 
-      <Pressable style={[styles.notification, { backgroundColor: theme.surface }]} onPress={onLogout}>
-        <MaterialCommunityIcons name="logout" size={20} color={theme.accentStrong} />
-      </Pressable>
+      <View style={styles.actionRow}>
+        <Pressable style={[styles.actionBtn, { backgroundColor: theme.surface }]} onPress={onNotification}>
+          <MaterialCommunityIcons name="bell-outline" size={20} color={theme.accentStrong} />
+        </Pressable>
+
+        <Pressable style={[styles.actionBtn, { backgroundColor: theme.surface }]} onPress={onLogout}>
+          <MaterialCommunityIcons name="logout" size={20} color={theme.accentStrong} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -59,15 +65,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.6
   },
-  notification: {
+  actionRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+  actionBtn: {
     width: 42,
     height: 42,
     borderRadius: 21,
     justifyContent: "center",
     alignItems: "center"
-  },
-  notificationText: {
-    fontSize: 12,
-    fontWeight: "800"
   }
 });

@@ -17,6 +17,7 @@ import { getPersistedSession } from "../utils/storage";
 import { THEMES } from "../utils/themes";
 const THEME = THEMES.gold;
 
+
 function getInitials(name) {
   if (!name) return "?";
   return name
@@ -135,6 +136,9 @@ export default function ActiveChitsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [theme, setTheme] = useState(THEMES.gold);
 
+  const THEME = theme;
+
+
   const fetchRequests = useCallback(async (isRefreshing = false) => {
     try {
       if (isRefreshing) setRefreshing(true);
@@ -162,7 +166,7 @@ export default function ActiveChitsScreen({ navigation }) {
   }, [fetchRequests]);
 
   const activeCount = requests.length;
-  const THEME = theme;
+
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>

@@ -17,7 +17,11 @@ import { getPersistedSession } from "../utils/storage";
 import { THEMES } from "../utils/themes";
 const THEME = THEMES.gold;
 
+
+import { formatNumber } from "../utils/format";
+
 function getInitials(name) {
+
   if (!name) return "?";
   return name
     .split(" ")
@@ -52,7 +56,7 @@ function RequestCard({ request, onApprove, onReject, isProcessing, theme }) {
         <View>
           <Text style={styles.reqTxnLabel}>TRANSACTION ID</Text>
           <Text style={styles.reqTxnId}>
-            #{(request.txnId || "").slice(-8).toUpperCase() || "—"}
+            {request.txnId || "—"}
           </Text>
         </View>
         <View style={[styles.pendingBadge, { backgroundColor: THEME.isSilver ? "#eef0f3" : "#fbe49d" }]}>
@@ -95,7 +99,7 @@ function RequestCard({ request, onApprove, onReject, isProcessing, theme }) {
               {request.requestType === "payment" ? "VERIFY PAYMENT" : "REQUESTED CHIT"}
             </Text>
             <Text style={[styles.chitDetailValue, { color: metalColor }]}>
-              ₹{(request.monthlyAmount || 0).toLocaleString("en-IN")}
+              ₹{formatNumber(request.monthlyAmount || 0)}
               {request.requestType === "payment" ? "" : "/month"}
             </Text>
           </View>
@@ -125,7 +129,7 @@ function RequestCard({ request, onApprove, onReject, isProcessing, theme }) {
           <View style={styles.chitSubRow}>
             <Text style={styles.chitSubLabel}>TOTAL VALUE</Text>
             <Text style={styles.chitSubValue}>
-              ₹{Number(request.totalAmount).toLocaleString("en-IN")}
+              ₹{formatNumber(request.totalAmount)}
             </Text>
           </View>
         ) : null}
@@ -174,6 +178,9 @@ export default function RequestsScreen() {
   const [theme, setTheme] = useState(THEMES.gold);
   const [department, setDepartment] = useState("gold");
 
+  const THEME = theme;
+
+
   const fetchRequests = useCallback(async (isRefreshing = false) => {
     try {
       if (isRefreshing) setRefreshing(true);
@@ -202,10 +209,11 @@ export default function RequestsScreen() {
   }, [fetchRequests]);
 
   const handleAction = async (requestId, status) => {
+    const request = requests.find((r) => r._id === requestId);
     const label = status === "approved" ? "Approve" : "Reject";
     Alert.alert(
       `Confirm ${label}`,
-      `Are you sure you want to ${status} this ${request.requestType === "payment" ? "payment transaction" : "chit request"}?`,
+      `Are you sure you want to ${status} this ${request?.requestType === "payment" ? "payment transaction" : "chit request"}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -234,7 +242,7 @@ export default function RequestsScreen() {
   };
 
   const pendingCount = requests.length;
-  const THEME = theme;
+
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>
@@ -287,9 +295,7 @@ export default function RequestsScreen() {
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryValue, { color: THEME.accentStrong }]}>
-                ₹{requests
-                  .reduce((s, r) => s + (r.monthlyAmount || 0), 0)
-                  .toLocaleString("en-IN")}
+                ₹{formatNumber(requests.reduce((s, r) => s + (r.monthlyAmount || 0), 0))}
               </Text>
               <Text style={styles.summaryLabel}>Monthly Value</Text>
             </View>

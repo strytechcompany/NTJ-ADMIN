@@ -16,14 +16,16 @@ import BottomTab from "../components/dashboard/BottomTab";
 import { getPaymentHistory } from "../services/api";
 import { getPersistedSession } from "../utils/storage";
 import { THEMES } from "../utils/themes";
+import { formatNumber } from "../utils/format";
 const THEME = THEMES.gold;
+
 
 // ────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────
 const formatAmount = (amount) => {
   if (!amount && amount !== 0) return "₹0";
-  return `₹${Number(amount).toLocaleString("en-IN")}`;
+  return `₹${formatNumber(amount)}`;
 };
 
 const formatDate = (dateStr) => {
@@ -124,7 +126,7 @@ function PaymentCard({ payment, theme }) {
   const initials = getInitials(payment.userName);
   const methodIcon = getMethodIcon(payment.paymentMethod);
 
-  const shortId = (payment.txnId || payment._id?.toString() || "").slice(-8).toUpperCase();
+  const displayId = payment.txnId || payment._id?.toString() || "";
 
   return (
     <View style={styles.paymentCard}>
@@ -152,7 +154,7 @@ function PaymentCard({ payment, theme }) {
           <View style={styles.dot} />
           <Text style={styles.metaText}>{formatTime(payment.createdAt)}</Text>
         </View>
-        <Text style={styles.txnId}>TXN #{shortId}</Text>
+        <Text style={styles.txnId}>TXN: {displayId}</Text>
       </View>
 
       {/* Status badge */}
@@ -180,6 +182,9 @@ export default function PaymentsScreen() {
   const [filter, setFilter] = useState("All");
   const [searchText, setSearchText] = useState("");
   const [theme, setTheme] = useState(THEMES.gold);
+
+  const THEME = theme;
+
 
   const FILTERS = ["All", "Success", "Pending", "Manual"];
 
@@ -234,7 +239,6 @@ export default function PaymentsScreen() {
     return matchesFilter && matchesSearch;
   });
 
-  const THEME = theme;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: THEME.page }]}>

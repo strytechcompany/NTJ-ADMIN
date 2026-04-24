@@ -15,8 +15,13 @@ router.get("/active-chits", protectAdmin, dashboardController.getActiveChits);
 router.post("/manual/user", protectAdmin, dashboardController.manualCreateUser);
 router.post("/manual/chit", protectAdmin, dashboardController.manualAssignChit);
 router.post("/manual/payment", protectAdmin, dashboardController.manualAddPayment);
+router.post("/manual/link-payment", protectAdmin, dashboardController.linkPaymentToChit);
 router.get("/payments", protectAdmin, dashboardController.getPaymentHistory);
 router.get("/debug/orders", protectAdmin, dashboardController.debugOrders);
+
+// Notifications
+router.post("/notifications", protectAdmin, dashboardController.sendNotification);
+router.get("/notifications", protectAdmin, dashboardController.getNotifications);
 
 // UPI Management
 router.get("/upi", protectAdmin, dashboardController.getUPIs);

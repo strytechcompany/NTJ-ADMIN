@@ -19,6 +19,7 @@ import { getPersistedSession } from "../utils/storage";
 import { THEMES } from "../utils/themes";
 const THEME = THEMES.gold;
 
+
 function AvatarBubble({ member, theme }) {
   const THEME = theme;
   if (member.hasImage && member.image) {
@@ -91,6 +92,9 @@ export default function MemberDirectoryScreen({ navigation }) {
   const [session, setSession] = useState(null);
   const [theme, setTheme] = useState(THEMES.gold);
 
+  const THEME = theme;
+
+
   const fetchMembers = useCallback(async (isRefreshing = false) => {
     try {
       if (isRefreshing) setRefreshing(true);
@@ -130,7 +134,7 @@ export default function MemberDirectoryScreen({ navigation }) {
   const totalMembers = members.length;
   const activeChits = members.reduce((sum, m) => sum + (m.activeChits || 0), 0);
   const pendingKyc = members.filter(m => m.status === "PENDING").length || 0;
-  const THEME = theme;
+
   const department = session?.department || "gold";
 
   return (

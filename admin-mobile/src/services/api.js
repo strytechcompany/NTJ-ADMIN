@@ -120,6 +120,28 @@ export const deleteMember = async (token, userId) => {
   }
 };
 
+export const sendNotification = async (token, payload) => {
+  try {
+    const response = await api.post("/admin/notifications", payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
+export const getNotifications = async (token) => {
+  try {
+    const response = await api.get("/admin/notifications", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
 export const updateMetalRate = async (token, payload) => {
   try {
     const response = await api.post("/admin/rate", payload, {
@@ -156,6 +178,17 @@ export const manualAssignChit = async (token, payload) => {
 export const manualAddPayment = async (token, payload) => {
   try {
     const response = await api.post("/admin/manual/payment", payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (err) {
+    extractError(err);
+  }
+};
+
+export const linkPaymentToChit = async (token, payload) => {
+  try {
+    const response = await api.post("/admin/manual/link-payment", payload, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;

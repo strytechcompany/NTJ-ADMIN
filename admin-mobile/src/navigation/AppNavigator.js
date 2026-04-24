@@ -12,6 +12,7 @@ import PaymentsScreen from "../screens/PaymentsScreen";
 import ActiveChitsScreen from "../screens/ActiveChitsScreen";
 import UPIScreen from "../screens/UPIScreen";
 import UserDetailScreen from "../screens/UserDetailScreen";
+import NotificationSendScreen from "../screens/NotificationSendScreen";
 import { getPersistedSession } from "../utils/storage";
 
 const Stack = createNativeStackNavigator();
@@ -60,6 +61,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="UPIScreen" component={UPIScreen} />
       <Stack.Screen name="UserDetail" component={UserDetailScreen} />
+      <Stack.Screen name="NotificationSend" component={NotificationSendScreen} />
     </Stack.Navigator>
   );
 }
